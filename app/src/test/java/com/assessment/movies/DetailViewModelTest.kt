@@ -57,6 +57,7 @@ private class DetailFixture : MovieRepository {
     var trailerRequests = 0
     override suspend fun genres(): List<Genre> = emptyList()
     override suspend fun movies(genreId: Int, page: Int): Page<Movie> = Page(emptyList(), page, 0)
+    override suspend fun search(query: String, page: Int): Page<Movie> = Page(emptyList(), page, 0)
     override suspend fun reviews(movieId: Int, page: Int): Page<Review> = Page(emptyList(), page, 0)
     override suspend fun detail(movieId: Int): MovieDetail {
         detailRequests++

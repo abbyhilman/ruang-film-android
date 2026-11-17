@@ -50,13 +50,15 @@ class TmdbRepositoryTest {
     }
 
     @Test fun `detail maps primary information without requiring optional values`() = runTest {
-        respond("""{"id":7,"title":"Fixture film","overview":null,"genres":null,"runtime":0}""")
+        respond("""{"id":7,"title":"Fixture film","overview":null,"genres":null,"runtime":0,"imdb_id":"tt0000001","credits":{"cast":[{"id":1,"name":"Fixture actor","profile_path":null,"character":"Fixture role"}]}}""")
         val detail = repository.detail(7)
         assertEquals("Fixture film", detail.movie.title)
         assertEquals("", detail.overview)
         assertTrue(detail.genres.isEmpty())
         assertNull(detail.runtime)
-        assertEquals("/3/movie/7", server.takeRequest().path)
+        assertEquals("tt0000001", detail.imdbId)
+        assertEquals("Fixture actor", detail.cast.single().name)
+        assertEquals("/3/movie/7?append_to_response=credits", server.takeRequest().path)
     }
 
     @Test fun `reviews use requested film and page`() = runTest {
@@ -115,5 +117,15 @@ class TmdbRepositoryTest {
 
     @Test fun `timeout is reported distinctly`() {
         assertEquals(R.string.error_timeout, errorMessage(SocketTimeoutException()))
+    }
+
+    @Test fun `search encodes query and paginates results`() = runTest {
+        respond("""{"page":2,"total_pages":3,"results":[{"id":9,"title":"Fixture result"}]}""")
+        val result = repository.search(" science fiction ", 2)
+        assertEquals(9, result.items.single().id)
+        val request = server.takeRequest().requestUrl!!
+        assertEquals("science fiction", request.queryParameter("query"))
+        assertEquals("2", request.queryParameter("page"))
+        assertEquals("/3/search/movie", request.encodedPath)
     }
 }

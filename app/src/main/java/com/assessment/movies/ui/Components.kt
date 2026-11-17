@@ -1,19 +1,12 @@
 package com.assessment.movies.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,13 +16,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.assessment.movies.R
+import com.assessment.movies.ui.components.ReviewSkeleton
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
@@ -50,40 +42,9 @@ fun StatusMessage(message: String, retry: (() -> Unit)? = null) {
 }
 
 @Composable
-fun Loading(modifier: Modifier = Modifier) {
-    Column(
-        modifier.fillMaxWidth().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CircularProgressIndicator(Modifier.size(28.dp))
-        Text(stringResource(R.string.loading))
-    }
-}
-
-@Composable
-fun Poster(path: String?, title: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier.aspectRatio(2f / 3f).background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            stringResource(R.string.poster_missing), Modifier.padding(12.dp),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        AsyncImage(
-            model = path?.takeIf { it.startsWith("/") }?.let { "https://image.tmdb.org/t/p/w500$it" },
-            contentDescription = stringResource(R.string.poster_description, title),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-@Composable
 fun <T> PaginationFooter(state: PagedState<T>, retry: () -> Unit) {
     when {
-        state.loading -> Loading()
+        state.loading -> ReviewSkeleton(Modifier.padding(16.dp))
         state.error != null -> StatusMessage(stringResource(state.error), retry)
         state.endReached && state.items.isNotEmpty() -> Text(
             stringResource(R.string.end_of_list), Modifier.padding(24.dp),
@@ -115,5 +76,3 @@ fun <T> LoadMoreOnScroll(state: PagedState<T>, gridState: LazyGridState, loadNex
         }
     }
 }
-
-val ScreenPadding = PaddingValues(20.dp)

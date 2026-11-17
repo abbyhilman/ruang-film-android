@@ -6,9 +6,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -33,45 +35,53 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.core.net.toUri
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.svg.SvgDecoder
+import com.assessment.movies.data.Movie
 import com.assessment.movies.data.MovieRepository
 import com.assessment.movies.data.TmdbRepository
 import com.assessment.movies.data.createTmdbApi
+import com.assessment.movies.ui.CatalogScreen
+import com.assessment.movies.ui.CatalogViewModel
 import com.assessment.movies.ui.DetailScreen
 import com.assessment.movies.ui.DetailViewModel
-import com.assessment.movies.ui.GenresScreen
-import com.assessment.movies.ui.GenresViewModel
 import com.assessment.movies.ui.MovieTheme
-import com.assessment.movies.ui.MoviesScreen
-import com.assessment.movies.ui.MoviesViewModel
 import com.assessment.movies.ui.ReviewsScreen
 import com.assessment.movies.ui.ReviewsViewModel
-import com.assessment.movies.ui.TrailerScreen
+import com.assessment.movies.ui.components.MovieImage
+import com.assessment.movies.ui.components.TrailerDialog
 import com.assessment.movies.ui.movieViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         val repository = TmdbRepository(createTmdbApi(BuildConfig.TMDB_READ_ACCESS_TOKEN))
-        setContent { MovieTheme { MovieApp(repository, ::openExternal) } }
+        val saved = getSharedPreferences("saved_movies", MODE_PRIVATE)
+        val initial = saved.getStringSet("ids", emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }
+        setContent {
+            MovieTheme {
+                MovieApp(
+                    repository, ::openExternal, initial,
+                    onFavoritesChanged = { ids -> saved.edit { putStringSet("ids", ids.map(Int::toString).toSet()) } },
+                    onShare = ::shareMovie,
+                )
+            }
+        }
     }
 
     private fun openExternal(uri: Uri) {
@@ -82,86 +92,94 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, R.string.cannot_open_link, Toast.LENGTH_LONG).show()
         }
     }
+
+    private fun shareMovie(movie: Movie) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "${movie.title}\nhttps://www.themoviedb.org/movie/${movie.id}")
+        }
+        startActivity(Intent.createChooser(intent, getString(R.string.share_movie)))
+    }
 }
 
 @Composable
-fun MovieApp(repository: MovieRepository, openExternal: (Uri) -> Unit = {}) {
+fun MovieApp(
+    repository: MovieRepository,
+    openExternal: (Uri) -> Unit = {},
+    initialFavorites: List<Int> = emptyList(),
+    onFavoritesChanged: (List<Int>) -> Unit = {},
+    onShare: (Movie) -> Unit = {},
+) {
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     var showAbout by rememberSaveable { mutableStateOf(false) }
-    val route = current?.destination?.route
-    val title = when {
-        route?.startsWith("movies/") == true -> current?.arguments?.getString("name").orEmpty()
-        route?.startsWith("detail/") == true -> stringResource(R.string.movie_detail)
-        route?.startsWith("reviews/") == true -> stringResource(R.string.reviews)
-        route?.startsWith("trailer/") == true -> stringResource(R.string.trailer)
-        else -> stringResource(R.string.app_name)
-    }
+    var favorites by rememberSaveable { mutableStateOf(initialFavorites) }
+    val reviewsRoute = current?.destination?.route?.startsWith("reviews/") == true
     Scaffold(
         modifier = Modifier.fillMaxSize().safeDrawingPadding(),
         topBar = {
-            Column {
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (nav.previousBackStackEntry != null) TextButton(onClick = { nav.popBackStack() }) {
-                        Text(stringResource(R.string.back))
-                    }
-                    Text(title, Modifier.weight(1f).padding(vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
-                    if (route == null || route == "genres") TextButton(onClick = { showAbout = true }) {
-                        Text(stringResource(R.string.about))
-                    }
-                }
-                HorizontalDivider()
+            if (reviewsRoute) Row(
+                Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                Text(stringResource(R.string.reviews), style = MaterialTheme.typography.titleLarge)
             }
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            NavHost(navController = nav, startDestination = "genres") {
-                composable("genres") { entry ->
-                    val model: GenresViewModel = viewModel(entry, factory = movieViewModelFactory { GenresViewModel(repository) })
-                    val state by model.state.collectAsStateWithLifecycle()
-                    GenresScreen(state, model::reload) { genre ->
-                        nav.navigate("movies/${genre.id}/${Uri.encode(genre.name)}") { launchSingleTop = true }
-                    }
+            NavHost(navController = nav, startDestination = "catalog") {
+                composable("catalog") { entry ->
+                    val model: CatalogViewModel = viewModel(entry, factory = movieViewModelFactory { CatalogViewModel(repository) })
+                    val genres by model.genres.collectAsStateWithLifecycle()
+                    val movies by model.movies.collectAsStateWithLifecycle()
+                    val query by model.query.collectAsStateWithLifecycle()
+                    val genreId by model.genreId.collectAsStateWithLifecycle()
+                    CatalogScreen(
+                        genres, movies, genreId, query, model::search, model::selectGenre,
+                        model::reloadGenres, model::loadNext,
+                        onMovie = { nav.navigate("detail/${it.id}") { launchSingleTop = true } },
+                        onPlay = { nav.navigate("detail/${it.id}?play=true") { launchSingleTop = true } },
+                        onProfile = { showAbout = true },
+                    )
                 }
                 composable(
-                    "movies/{id}/{name}",
-                    arguments = listOf(navArgument("id") { type = NavType.IntType }),
+                    "detail/{id}?play={play}",
+                    arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("play") { type = NavType.BoolType; defaultValue = false }),
                 ) { entry ->
-                    val id = entry.arguments!!.getInt("id")
-                    val model: MoviesViewModel = viewModel(entry, factory = movieViewModelFactory { MoviesViewModel(repository, id) })
-                    val state by model.state.collectAsStateWithLifecycle()
-                    MoviesScreen(state, model::loadNext) { movie ->
-                        nav.navigate("detail/${movie.id}") { launchSingleTop = true }
-                    }
-                }
-                composable("detail/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
                     val id = entry.arguments!!.getInt("id")
                     val model: DetailViewModel = viewModel(entry, factory = movieViewModelFactory { DetailViewModel(repository, id) })
                     val detail by model.detail.collectAsStateWithLifecycle()
                     val trailer by model.trailer.collectAsStateWithLifecycle()
+                    var videoOpen by rememberSaveable(id) { mutableStateOf(entry.arguments!!.getBoolean("play")) }
                     DetailScreen(
-                        detail, trailer, model::reloadDetail, model::reloadTrailer,
+                        detail, trailer, model::reloadDetail,
                         onReviews = { nav.navigate("reviews/$id") { launchSingleTop = true } },
-                        onTrailer = { nav.navigate("trailer/${it.key}/${Uri.encode(it.title.ifBlank { detail.data?.movie?.title.orEmpty() })}") { launchSingleTop = true } },
+                        onPlay = { videoOpen = true }, onBack = { nav.popBackStack() },
+                        favorite = id in favorites,
+                        onFavorite = {
+                            favorites = if (id in favorites) favorites - id else favorites + id
+                            onFavoritesChanged(favorites)
+                        },
+                        onSource = {
+                            openExternal((detail.data?.imdbId?.let { "https://www.imdb.com/title/$it/" } ?: "https://www.themoviedb.org/movie/$id").toUri())
+                        },
+                        onShare = { detail.data?.movie?.let(onShare) },
+                    )
+                    if (videoOpen) TrailerDialog(
+                        trailer, detail.data?.movie?.title ?: stringResource(R.string.trailer),
+                        onDismiss = { videoOpen = false }, onRetry = model::reloadTrailer, openExternal = openExternal,
                     )
                 }
                 composable("reviews/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
-                    val id = entry.arguments!!.getInt("id")
-                    val model: ReviewsViewModel = viewModel(entry, factory = movieViewModelFactory { ReviewsViewModel(repository, id) })
+                    val model: ReviewsViewModel = viewModel(entry, factory = movieViewModelFactory { ReviewsViewModel(repository, entry.arguments!!.getInt("id")) })
                     val state by model.state.collectAsStateWithLifecycle()
                     ReviewsScreen(state, model::loadNext)
-                }
-                composable("trailer/{key}/{title}") { entry ->
-                    TrailerScreen(entry.arguments!!.getString("key").orEmpty(), entry.arguments!!.getString("title").orEmpty(), openExternal)
                 }
             }
         }
     }
-    if (showAbout) AboutDialog(onDismiss = { showAbout = false }, openExternal = openExternal)
+    if (showAbout) AboutDialog(onDismiss = { showAbout = false }, openExternal)
 }
 
 @Composable
@@ -171,23 +189,13 @@ private fun AboutDialog(onDismiss: () -> Unit, openExternal: (Uri) -> Unit) {
         title = { Text(stringResource(R.string.app_name)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data("file:///android_asset/tmdb-logo.svg")
-                        .decoderFactory(SvgDecoder.Factory())
-                        .build(),
-                    contentDescription = stringResource(R.string.tmdb_logo),
-                    modifier = Modifier.width(124.dp).height(32.dp),
-                )
+                MovieImage("file:///android_asset/tmdb-logo.svg", stringResource(R.string.tmdb_logo), Modifier.size(124.dp, 32.dp), contentScale = ContentScale.Fit, fallbackText = "TMDB")
                 Text(stringResource(R.string.data_source))
                 Text(stringResource(R.string.tmdb_attribution))
+                Text(stringResource(R.string.demo_profile_note), style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
-        dismissButton = {
-            TextButton(onClick = { openExternal("https://www.themoviedb.org".toUri()) }) {
-                Text(stringResource(R.string.visit_tmdb))
-            }
-        },
+        dismissButton = { TextButton(onClick = { openExternal("https://www.themoviedb.org".toUri()) }) { Text(stringResource(R.string.visit_tmdb)) } },
     )
 }

@@ -19,11 +19,21 @@ internal class TmdbRepository(private val api: TmdbApi) : MovieRepository {
         val dto = api.detail(movieId)
         val id = dto.id?.takeIf { it == movieId } ?: throw IOException("Unexpected movie response")
         return MovieDetail(
-            Movie(id, dto.title.orEmpty(), dto.posterPath, dto.releaseDate.orEmpty(), dto.rating ?: 0.0, dto.voteCount ?: 0),
+            Movie(id, dto.title.orEmpty(), dto.posterPath, dto.releaseDate.orEmpty(), dto.rating ?: 0.0, dto.voteCount ?: 0, dto.backdropPath),
             dto.overview.orEmpty(),
             dto.genres.orEmpty().mapNotNull { it.toModel() },
             dto.runtime?.takeIf { it > 0 },
+            dto.credits?.cast.orEmpty().mapNotNull { cast ->
+                cast.id?.takeIf { it > 0 }?.let { CastMember(it, cast.name.orEmpty(), cast.character.orEmpty(), cast.profilePath) }
+            }.distinctBy { it.id }.take(20),
+            dto.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) },
         )
+    }
+
+    override suspend fun search(query: String, page: Int): Page<Movie> {
+        require(query.isNotBlank() && page in 1..500)
+        val response = api.search(query.trim(), page)
+        return Page(response.results.orEmpty().mapNotNull { it.toModel() }, response.page ?: page, response.totalPages ?: 0)
     }
 
     override suspend fun reviews(movieId: Int, page: Int): Page<Review> {

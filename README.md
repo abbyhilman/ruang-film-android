@@ -1,6 +1,6 @@
 # Ruang Film - Android Native Assessment
 
-Aplikasi Kotlin untuk assessment **Option 1: Movies**. Android saja, dengan Jetpack Compose dan pola MVVM (ViewModel + Repository). UI katalog terang, poster dominan, aksen merah. Bahasa antarmuka Indonesia; konten mengikuti bahasa default TMDB.
+Aplikasi Kotlin untuk assessment **Option 1: Movies**. Android saja, dengan Jetpack Compose dan pola MVVM (ViewModel + Repository). Katalog gelap dengan font Inter, banner film, chip genre ungu, grid poster dan tombol putar merah mengikuti referensi Figma yang dipilih. Bahasa antarmuka Indonesia; konten mengikuti bahasa default TMDB.
 
 ## Menjalankan
 
@@ -26,15 +26,17 @@ Laporan lint: `app/build/reports/lint-results-debug.html`.
 
 | User story | Implementasi |
 | --- | --- |
-| Genre resmi film | Layar genre mengambil `/genre/movie/list` |
+| Genre resmi film | Chip dan pemilih genre mengambil `/genre/movie/list` |
 | Discover berdasarkan genre | Grid poster, filter `with_genres`, pagination `/discover/movie` |
-| Informasi utama film | Judul, poster, sinopsis, tahun, durasi, genre dan rating dari `/movie/{id}` |
+| Informasi utama film | Judul, poster, sinopsis, tahun, durasi, genre, rating, pemeran dan IMDb dari `/movie/{id}?append_to_response=credits` |
 | Ulasan pengguna | Layar ulasan dari `/movie/{id}/reviews`, teks panjang dapat diperluas |
-| Trailer YouTube | Memilih video bertipe Trailer di YouTube, mendahulukan yang official; pemutar tertanam dan tombol membuka YouTube |
+| Trailer YouTube | Memilih trailer YouTube official terlebih dahulu; dialog pemutar dengan autoplay setelah dipilih, waktu, seek, putar/jeda, tutup dan tautan YouTube |
 | Endless scrolling | Daftar film dan ulasan memuat halaman berikutnya mendekati akhir daftar |
-| Kasus positif/negatif | Loading, kosong, gambar hilang, timeout, koneksi gagal, HTTP error, retry, trailer tidak tersedia |
+| Kasus positif/negatif | Skeleton data/kartu/gambar, kosong, gambar hilang, timeout, koneksi gagal, HTTP error, retry, trailer tidak tersedia |
 
-Alur: **Genre -> Film -> Detail -> Ulasan / Trailer**. Tombol kembali dan back sistem mengikuti back stack. Halaman detail dan daftar menggunakan state ViewModel; posisi scroll disimpan oleh state Compose selama navigasi/rekreasi activity. Setelah process death, ID rute dipulihkan dan data diambil ulang.
+Alur: **Katalog / Pencarian -> Detail -> Ulasan / Dialog trailer**. Pencarian menggunakan `/search/movie` dengan debounce 350 ms, pembatalan request lama dan pagination. Ikon hati menyimpan ID film secara lokal; tombol share membuka lembar berbagi Android. Avatar tamu membuka informasi aplikasi dan atribusi.
+
+Tombol kembali dan back sistem mengikuti back stack. Halaman detail dan daftar menggunakan state ViewModel; posisi scroll disimpan oleh state Compose selama navigasi/rekreasi activity. Setelah process death, ID rute dipulihkan dan data diambil ulang.
 
 ## Struktur dan keputusan
 
@@ -42,7 +44,8 @@ Alur: **Genre -> Film -> Detail -> Ulasan / Trailer**. Tombol kembali dan back s
 app/src/main/java/com/assessment/movies/
   MainActivity.kt           entry point dan navigasi
   data/                    kontrak model, Retrofit DTO, mapping dan repository TMDB
-  ui/                      state, ViewModel, layar Compose, pemutar WebView
+  ui/                      state, ViewModel, layar Compose dan token tema
+  ui/components/           gambar, kartu, chip, rating, skeleton, ulasan dan dialog trailer global
 app/src/test/              test pagination, repository HTTP, ViewModel dan navigasi UI
 ```
 
@@ -51,8 +54,9 @@ app/src/test/              test pagination, repository HTTP, ViewModel dan navig
 - Pagination khusus yang kecil: satu request aktif per daftar, deduplikasi berdasarkan ID, retry halaman yang sama, mempertahankan hasil sebelumnya, berhenti pada halaman terakhir/hasil kosong/batas halaman 500 TMDB.
 - Detail dan trailer dimuat terpisah: kegagalan trailer tidak menghilangkan informasi film.
 - Tidak ada retry otomatis tanpa batas. Pengguna memicu retry untuk error; scrolling tidak mengulang request yang gagal secara terus-menerus.
-- Poster menggunakan Coil dengan ruang ukuran tetap dan placeholder yang jelas jika gambar hilang/gagal.
-- Trailer menggunakan YouTube embed tanpa autoplay, origin/referrer aplikasi, validasi ID, file/content access dimatikan dan mixed content ditolak. Pemutaran dijeda saat aplikasi masuk background dan WebView dihancurkan ketika meninggalkan layar.
+- Poster, banner, foto pemeran dan avatar memakai satu komponen Coil, ruang gambar tetap, skeleton saat memuat dan fallback ketika gambar hilang/gagal.
+- Trailer menggunakan YouTube IFrame API dengan autoplay yang diminta setelah aksi pengguna, origin/referrer aplikasi, validasi ID, file/content access dimatikan dan mixed content ditolak. Indikator waktu mengambil posisi/durasi asli; kontrol aktif setelah player siap. Pemutaran dijeda saat aplikasi masuk background dan WebView dihancurkan ketika dialog ditutup.
+- Dialog mengikuti layar portrait; video mempertahankan proporsi aslinya. YouTube tetap dapat membatasi autoplay atau embed; kontrol putar dan tautan YouTube menyediakan alternatif. Waktu ditampilkan `--:--` sampai data player tersedia, dan loading player yang tidak merespons dibatasi 20 detik.
 - Review dirender sebagai teks, bukan HTML dari API.
 
 ## Teknologi
@@ -63,18 +67,18 @@ AGP 9.5.1 (built-in Kotlin), Compose compiler 2.4.21, Gradle 9.6.0, Compose BOM 
 
 - `secrets.properties`, `local.properties`, cache, build output dan signing key diabaikan oleh Git. Tidak ada token nyata dalam source yang disiapkan.
 - Token baca yang dimasukkan saat build berada di APK dan dapat diekstrak. Jangan gunakan kredensial berprivilege tinggi; untuk kebutuhan produksi dengan rahasia server, gunakan backend yang sesuai.
-- Hanya izin internet; tidak ada login pengguna, database, analytics, iklan atau izin penyimpanan.
-- Tidak ada cache offline persisten. Koneksi internet dan akses TMDB dibutuhkan untuk data asli.
+- Hanya izin internet; tidak ada login pengguna, database, analytics, iklan atau izin penyimpanan. ID film yang disimpan menggunakan SharedPreferences privat aplikasi.
+- Tidak ada katalog offline persisten. Coil mengelola cache gambar; koneksi internet dan akses TMDB dibutuhkan untuk data film.
 - Ketersediaan review, poster dan trailer mengikuti data TMDB. Beberapa trailer dapat menolak embed; tombol YouTube menyediakan alternatif.
 - APK debug untuk evaluasi, bukan release bertanda tangan untuk Play Store.
 - Ikon launcher memakai ikon slideshow bawaan Android; identitas aplikasi di dalam UI berupa nama teks.
-- Source belum diunggah ke repository remote. Upload dan pengiriman link merupakan langkah pengumpulan terpisah.
+- Source tersedia di [GitHub](https://github.com/abbyhilman/ruang-film-android). Pengembangan dan pengumpulan perubahan menggunakan branch `main` sesuai pilihan pemilik proyek.
 
 ## Pengujian dan dokumentasi
 
 Test menggunakan MockWebServer untuk batas HTTP, coroutine test untuk state/pagination, serta Robolectric + Compose untuk alur UI tanpa perangkat fisik. Semua film, penulis dan ulasan berlabel Fixture hanya terdapat dalam source test, tidak dalam aplikasi.
 
-Verifikasi terakhir pada 2026-11-17: build debug berhasil, 28 test lulus, lint 0 error dengan satu warning informasi Gradle yang lebih baru, dan tanda tangan APK debug valid. Smoke test HTTP langsung ke TMDB berhasil untuk genre, discover halaman 1/2, detail, ulasan halaman 1/2, metadata trailer dan CDN poster. Rendering data asli dan playback YouTube di perangkat/emulator belum diverifikasi.
+Verifikasi 2026-11-17: build debug berhasil, 45 test lulus, lint 0 error dan 1 warning informasi Gradle lebih baru, tanda tangan APK debug valid v2. Laporan pengujian dan lint tersedia pada path di bagian Menjalankan. Screenshot native fixture mencakup katalog/detail/ulasan/dialog pada 430 dp, katalog 600 dp, serta layar 320 dp dengan teks 150%. Smoke test HTTP langsung ke TMDB berhasil untuk genre, discover halaman 1/2, pencarian, detail termasuk credits/IMDb, ulasan halaman 1/2, metadata trailer dan CDN poster. Rendering gambar asli dan playback YouTube di perangkat/emulator belum diverifikasi.
 
 ## Sumber resmi dan atribusi
 
@@ -90,3 +94,5 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 Data dan gambar tetap mengikuti hak pemilik serta ketentuan TMDB/YouTube; bukan aset milik aplikasi.
 
 Logo TMDB dalam `app/src/main/assets/tmdb-logo.svg` adalah aset resmi tanpa modifikasi dari [TMDB](https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg). Logo ditampilkan pada About dengan proporsi asli untuk mengidentifikasi penyedia data. Library dan Gradle wrapper tetap mengikuti lisensi dan copyright masing-masing.
+
+Font [Inter](https://github.com/google/fonts/tree/main/ofl/inter) disertakan bersama lisensi SIL OFL di `app/src/main/assets/licenses/inter-OFL.txt`. Avatar ilustrasi tamu memakai [DiceBear Notionists](https://www.dicebear.com/styles/notionists/) oleh Zoish (CC0), dibundel agar tidak membutuhkan request profil eksternal.

@@ -16,8 +16,11 @@ internal interface TmdbApi {
     @GET("discover/movie")
     suspend fun movies(@Query("with_genres") genreId: Int, @Query("page") page: Int): PageDto<MovieDto>
 
+    @GET("search/movie")
+    suspend fun search(@Query("query") query: String, @Query("page") page: Int): PageDto<MovieDto>
+
     @GET("movie/{id}")
-    suspend fun detail(@Path("id") movieId: Int): MovieDetailDto
+    suspend fun detail(@Path("id") movieId: Int, @Query("append_to_response") append: String = "credits"): MovieDetailDto
 
     @GET("movie/{id}/reviews")
     suspend fun reviews(@Path("id") movieId: Int, @Query("page") page: Int): PageDto<ReviewDto>
@@ -64,9 +67,10 @@ internal data class MovieDto(
     @SerializedName("release_date") val releaseDate: String?,
     @SerializedName("vote_average") val rating: Double?,
     @SerializedName("vote_count") val voteCount: Int?,
+    @SerializedName("backdrop_path") val backdropPath: String?,
 ) {
     fun toModel(): Movie? = id?.takeIf { it > 0 }?.let {
-        Movie(it, title.orEmpty(), posterPath, releaseDate.orEmpty(), rating ?: 0.0, voteCount ?: 0)
+        Movie(it, title.orEmpty(), posterPath, releaseDate.orEmpty(), rating ?: 0.0, voteCount ?: 0, backdropPath)
     }
 }
 internal data class MovieDetailDto(
@@ -79,6 +83,14 @@ internal data class MovieDetailDto(
     val overview: String?,
     val genres: List<GenreDto>?,
     val runtime: Int?,
+    @SerializedName("backdrop_path") val backdropPath: String?,
+    @SerializedName("imdb_id") val imdbId: String?,
+    val credits: CreditsDto?,
+)
+internal data class CreditsDto(val cast: List<CastDto>?)
+internal data class CastDto(
+    val id: Int?, val name: String?, val character: String?,
+    @SerializedName("profile_path") val profilePath: String?,
 )
 internal data class AuthorDetailsDto(val rating: Double?)
 internal data class ReviewDto(
