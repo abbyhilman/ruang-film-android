@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ruang Film</string>
+    <string name="tmdb_logo">Logo TMDB</string>
+    <string name="genres_intro">Film apa yang ingin kamu tonton?</string>
+    <string name="genres_description">Pilih genre untuk menemukan film berikutnya.</string>
+    <string name="movie_detail">Detail film</string>
+    <string name="reviews">Ulasan penonton</string>
+    <string name="reviews_action">Baca ulasan penonton</string>
+    <string name="trailer">Trailer</string>
+    <string name="watch_trailer">Tonton trailer</string>
+    <string name="synopsis">Sinopsis</string>
+    <string name="back">Kembali</string>
+    <string name="retry">Coba lagi</string>
+    <string name="loading">Memuat…</string>
+    <string name="no_genres">Genre belum tersedia.</string>
+    <string name="no_movies">Belum ada film untuk genre ini.</string>
+    <string name="no_reviews">Belum ada ulasan untuk film ini.</string>
+    <string name="no_trailer">Trailer YouTube belum tersedia.</string>
+    <string name="no_synopsis">Sinopsis belum tersedia.</string>
+    <string name="poster_missing">Poster tidak tersedia</string>
+    <string name="poster_description">Poster %1$s</string>
+    <string name="year_unknown">Tahun belum tersedia</string>
+    <plurals name="runtime">
+        <item quantity="other">%1$d menit</item>
+    </plurals>
+    <string name="rating">%1$.1f / 10</string>
+    <string name="no_rating">Belum ada rating</string>
+    <string name="review_author">Oleh %1$s</string>
+    <string name="anonymous">Anonim</string>
+    <string name="expand_review">Baca selengkapnya</string>
+    <string name="collapse_review">Tampilkan lebih sedikit</string>
+    <string name="end_of_list">Semua hasil sudah ditampilkan.</string>
+    <string name="about">Tentang aplikasi</string>
+    <string name="close">Tutup</string>
+    <string name="data_source">Data dan gambar film disediakan oleh TMDB.</string>
+    <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="visit_tmdb">Kunjungi TMDB</string>
+    <string name="open_youtube">Buka di YouTube</string>
+    <string name="player_hint">Tekan tombol putar pada video. Jika video tidak dapat diputar di sini, buka di YouTube.</string>
+    <string name="trailer_error">Video tidak dapat dimuat. Coba lagi atau buka di YouTube.</string>
+    <string name="cannot_open_link">Tidak ada aplikasi yang dapat membuka tautan ini.</string>
+    <string name="error_network">Tidak dapat terhubung. Periksa koneksi internet lalu coba lagi.</string>
+    <string name="error_timeout">Koneksi terlalu lama. Silakan coba lagi.</string>
+    <string name="error_auth">Akses layanan film ditolak. Periksa konfigurasi akses TMDB.</string>
+    <string name="error_setup">Layanan film belum dikonfigurasi. Ikuti petunjuk konfigurasi pada README proyek.</string>
+    <string name="error_rate_limit">Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.</string>
+    <string name="error_not_found">Film yang dicari tidak tersedia.</string>
+    <string name="error_server">Layanan film sedang bermasalah. Silakan coba lagi.</string>
+    <string name="error_generic">Data belum dapat dimuat. Silakan coba lagi.</string>
+</resources>
