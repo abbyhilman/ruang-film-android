@@ -68,9 +68,10 @@ internal data class MovieDto(
     @SerializedName("vote_average") val rating: Double?,
     @SerializedName("vote_count") val voteCount: Int?,
     @SerializedName("backdrop_path") val backdropPath: String?,
+    @SerializedName("original_language") val originalLanguage: String?,
 ) {
     fun toModel(): Movie? = id?.takeIf { it > 0 }?.let {
-        Movie(it, title.orEmpty(), posterPath, releaseDate.orEmpty(), rating ?: 0.0, voteCount ?: 0, backdropPath)
+        Movie(it, title.orEmpty(), posterPath, releaseDate.orEmpty(), rating ?: 0.0, voteCount ?: 0, backdropPath, originalLanguage)
     }
 }
 internal data class MovieDetailDto(
@@ -86,6 +87,7 @@ internal data class MovieDetailDto(
     @SerializedName("backdrop_path") val backdropPath: String?,
     @SerializedName("imdb_id") val imdbId: String?,
     val credits: CreditsDto?,
+    @SerializedName("original_language") val originalLanguage: String?,
 )
 internal data class CreditsDto(val cast: List<CastDto>?)
 internal data class CastDto(

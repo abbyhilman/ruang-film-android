@@ -10,6 +10,7 @@ data class Movie(
     val rating: Double,
     val voteCount: Int,
     val backdropPath: String? = null,
+    val originalLanguage: String? = null,
 )
 
 data class MovieDetail(

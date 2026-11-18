@@ -1,16 +1,9 @@
 package com.assessment.movies.ui.components
 
-import android.annotation.SuppressLint
 import android.net.Uri
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebChromeClient
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -63,7 +55,6 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun TrailerDialog(
@@ -74,9 +65,9 @@ fun TrailerDialog(
     openExternal: (Uri) -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 650.dp).testTag("trailer-dialog"),
-            shape = RoundedCornerShape(18.dp), color = MovieStyle.Canvas,
+        Box(
+            Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 650.dp)
+                .background(MovieStyle.Canvas, RoundedCornerShape(18.dp)).testTag("trailer-dialog"),
         ) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,64 +82,35 @@ fun TrailerDialog(
                     }
                     state.error != null -> StatusMessage(stringResource(state.error), onRetry)
                     state.data == null -> StatusMessage(stringResource(R.string.no_trailer))
-                    else -> YouTubePlayer(state.data.key, openExternal)
+                    else -> YouTubePlayer(state.data.key, openExternal, onRetry)
                 }
             }
         }
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit) {
-    val context = LocalContext.current
+private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit, onRetry: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var playback by remember(videoKey) { mutableStateOf(PlaybackState()) }
     var seekPosition by remember(videoKey) { mutableStateOf<Float?>(null) }
-    val released = remember(videoKey) { AtomicBoolean(false) }
-    val webView = remember(videoKey) {
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.mediaPlaybackRequiresUserGesture = false
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (!request.isForMainFrame) return false
-                    val uri = request.url
-                    if (uri.scheme == "https" && uri.host == "com.assessment.movies") return false
-                    if (uri.scheme == "https") openExternal(uri)
-                    return true
-                }
-                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                    if (request.isForMainFrame) playback = playback.copy(error = -1)
-                }
-            }
-            loadDataWithBaseURL(PLAYER_ORIGIN, trailerHtml(videoKey), "text/html", "utf-8", null)
-        }
-    }
-    DisposableEffect(webView, lifecycle) {
+    val session = remember(videoKey) { TrailerPlayerSession(videoKey) { playback = playback.copy(error = it) } }
+    DisposableEffect(session, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (!released.get()) when (event) {
-                Lifecycle.Event.ON_PAUSE -> {
-                    webView.evaluateJavascript("window.moviePlayer?.pauseVideo()", null)
-                    webView.onPause()
-                }
-                Lifecycle.Event.ON_RESUME -> webView.onResume()
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> session.background()
+                Lifecycle.Event.ON_RESUME -> session.foreground()
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(webView, lifecycle) {
+    LaunchedEffect(session, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive && !released.get()) {
-                webView.evaluateJavascript("window.readMovieState ? window.readMovieState() : null") { raw ->
-                    if (!released.get()) parsePlaybackState(raw)?.let {
+            while (isActive) {
+                session.evaluate("window.readMovieState ? window.readMovieState() : null") { raw ->
+                    parsePlaybackState(raw)?.let {
                         playback = if (!it.ready && it.error == 0) it.copy(error = playback.error) else it
                     }
                 }
@@ -156,27 +118,25 @@ private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit) {
             }
         }
     }
-    LaunchedEffect(webView) {
+    LaunchedEffect(session) {
         delay(20_000)
-        if (!released.get() && !playback.ready && playback.error == 0) playback = playback.copy(error = -1)
+        if (!playback.ready && playback.error == 0) playback = playback.copy(error = -1)
     }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(maxOf(maxWidth * 9f / 16f, 200.dp))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).testTag("video-surface")) {
             AndroidView(
-                factory = { webView }, modifier = Modifier.fillMaxSize(),
+                factory = { session.create(it, openExternal) }, modifier = Modifier.fillMaxSize(),
                 onReset = null,
-                onRelease = { released.set(true); it.stopLoading(); it.destroy() },
+                onRelease = session::release,
             )
             if (!playback.ready && playback.error == 0) PlayerSkeleton(Modifier.fillMaxSize())
         }
-    }
     val ready = playback.ready && playback.duration > 0 && playback.error == 0
     val seekLabel = stringResource(R.string.video_position)
     Slider(
         value = (seekPosition ?: playback.position.toFloat()).coerceIn(0f, maxOf(1f, playback.duration.toFloat())),
         onValueChange = { seekPosition = it },
         onValueChangeFinished = {
-            seekPosition?.let { webView.evaluateJavascript("window.moviePlayer?.seekTo(${it.toDouble()},true)", null) }
+            seekPosition?.let { session.evaluate("window.moviePlayer?.seekTo(${it.toDouble()},true)") }
             seekPosition = null
         },
         valueRange = 0f..maxOf(1f, playback.duration.toFloat()), enabled = ready,
@@ -187,15 +147,19 @@ private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit) {
             if (ready) "${formatPlaybackTime(playback.position)} / ${formatPlaybackTime(playback.duration)}" else "--:-- / --:--",
             Modifier.weight(1f).testTag("video-time"), style = MaterialTheme.typography.bodySmall,
         )
-        TextButton(enabled = ready, onClick = {
-            webView.evaluateJavascript(if (playback.playing) "window.moviePlayer?.pauseVideo()" else "window.moviePlayer?.playVideo()", null)
+        TextButton(enabled = playback.ready && playback.error == 0, onClick = {
+            session.evaluate(if (playback.playing) "window.moviePlayer?.pauseVideo()" else "window.moviePlayer?.playVideo()")
         }) { Text(stringResource(if (playback.playing) R.string.pause_video else R.string.play_video)) }
     }
-    if (playback.error != 0) Text(stringResource(R.string.trailer_error), style = MaterialTheme.typography.bodyMedium)
+    if (playback.error != 0) {
+        Text(stringResource(R.string.trailer_error), style = MaterialTheme.typography.bodyMedium)
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry_player)) }
+    }
     Text(stringResource(R.string.player_hint), style = MaterialTheme.typography.bodySmall, color = MovieStyle.Muted)
-    TextButton(onClick = { openExternal("https://www.youtube.com/watch?v=$videoKey".toUri()) }) {
+    TextButton(onClick = { session.pause(); openExternal("https://www.youtube.com/watch?v=$videoKey".toUri()) }) {
         Text(stringResource(R.string.open_youtube))
     }
+    Text(stringResource(R.string.video_not_visible), style = MaterialTheme.typography.bodySmall, color = MovieStyle.Muted)
 }
 
 internal data class PlaybackState(val ready: Boolean = false, val playing: Boolean = false, val position: Double = 0.0, val duration: Double = 0.0, val error: Int = 0)
@@ -217,7 +181,7 @@ internal fun formatPlaybackTime(seconds: Double): String {
     else String.format(Locale.ROOT, "%d:%02d", value / 60, value % 60)
 }
 
-private const val PLAYER_ORIGIN = "https://com.assessment.movies/"
+internal const val PLAYER_ORIGIN = "https://com.assessment.movies/"
 
 internal fun trailerHtml(key: String): String {
     require(key.matches(Regex("[A-Za-z0-9_-]{11}")))
@@ -225,7 +189,7 @@ internal fun trailerHtml(key: String): String {
         <!doctype html><html lang="id"><head>
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <meta name="referrer" content="strict-origin-when-cross-origin"><title>Trailer film</title>
-        <style>html,body,main{margin:0;width:100%;height:100%;background:#000}iframe{display:block;border:0;width:100%;height:100%}</style>
+        <style>html,body,main{margin:0;width:100%;height:100%;overflow:hidden;background:#000}iframe{position:absolute;inset:0;display:block;border:0;width:100%;height:100%}</style>
         </head><body><main>
         <iframe id="player" title="Trailer YouTube" width="640" height="360"
         src="https://www.youtube.com/embed/$key?autoplay=1&amp;controls=1&amp;fs=0&amp;playsinline=1&amp;enablejsapi=1&amp;origin=https%3A%2F%2Fcom.assessment.movies"

@@ -40,19 +40,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.assessment.movies.R
 import com.assessment.movies.data.Genre
 import com.assessment.movies.data.Movie
 import com.assessment.movies.ui.MovieStyle
 
 @Composable
-fun ProfileHeader(onProfile: () -> Unit, onGenres: () -> Unit) {
+fun ProfileHeader(onProfile: () -> Unit, onGenres: () -> Unit, genresEnabled: Boolean = true) {
     val profileLabel = stringResource(R.string.demo_avatar)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 64.dp),
@@ -69,17 +72,19 @@ fun ProfileHeader(onProfile: () -> Unit, onGenres: () -> Unit) {
             Text(stringResource(R.string.welcome_back), style = MaterialTheme.typography.bodySmall, color = MovieStyle.Muted)
             Text(stringResource(R.string.guest_name), style = MaterialTheme.typography.titleMedium)
         }
-        IconButton(onClick = onGenres) { Icon(Icons.Default.Menu, stringResource(R.string.choose_genre), tint = MovieStyle.Muted) }
+        IconButton(onClick = onGenres, enabled = genresEnabled) { Icon(Icons.Default.Menu, stringResource(R.string.choose_genre), tint = MovieStyle.Muted) }
     }
 }
 
 @Composable
-fun MovieSearchField(query: String, onQueryChanged: (String) -> Unit, modifier: Modifier = Modifier) {
+fun MovieSearchField(query: String, onQueryChanged: (String) -> Unit, modifier: Modifier = Modifier, loading: Boolean = false) {
     val searchLabel = stringResource(R.string.search_movies)
+    val loadingLabel = stringResource(R.string.loading_catalog)
+    Box(modifier) {
     TextField(
         value = query,
         onValueChange = onQueryChanged,
-        modifier = modifier.fillMaxWidth().testTag("movie-search").semantics { contentDescription = searchLabel },
+        modifier = Modifier.fillMaxWidth().testTag("movie-search").semantics { contentDescription = searchLabel },
         placeholder = { Text(stringResource(R.string.search_movies)) },
         leadingIcon = { Icon(Icons.Default.Search, null, tint = MovieStyle.Muted) },
         trailingIcon = if (query.isNotEmpty()) ({
@@ -98,15 +103,25 @@ fun MovieSearchField(query: String, onQueryChanged: (String) -> Unit, modifier: 
             cursorColor = MovieStyle.Gold,
         ),
     )
+    if (loading) Box(
+        Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp).testTag("search-loading").semantics { contentDescription = loadingLabel },
+    ) { SkeletonBlock(Modifier.fillMaxWidth().height(3.dp)) }
+    }
 }
 
 @Composable
-fun GenreChip(genre: Genre, selected: Boolean, onClick: () -> Unit) {
+fun GenreChip(genre: Genre, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, singleLine: Boolean = false) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(genre.name, style = MaterialTheme.typography.labelMedium) },
-        modifier = Modifier.heightIn(min = 44.dp).testTag("genre-${genre.id}"),
+        label = {
+            Text(
+                genre.name, style = MaterialTheme.typography.labelMedium,
+                maxLines = if (singleLine) 1 else 2, softWrap = !singleLine,
+                overflow = if (singleLine) TextOverflow.Clip else TextOverflow.Ellipsis,
+            )
+        },
+        modifier = modifier.heightIn(min = 48.dp).testTag("genre-${genre.id}"),
         shape = RoundedCornerShape(8.dp),
         border = null,
         colors = FilterChipDefaults.filterChipColors(
@@ -164,17 +179,28 @@ fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modi
 }
 
 @Composable
-fun PlayButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PlayButton(onClick: () -> Unit, modifier: Modifier = Modifier, visualSize: Dp = 48.dp) {
     IconButton(
         onClick = onClick,
         modifier = modifier.size(48.dp),
-        colors = IconButtonDefaults.iconButtonColors(containerColor = MovieStyle.Play, contentColor = Color.White),
-    ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.watch_trailer), Modifier.size(32.dp)) }
+        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+    ) {
+        Box(Modifier.size(visualSize).background(MovieStyle.Play, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.PlayArrow, stringResource(R.string.watch_trailer), Modifier.size(visualSize * .65f))
+        }
+    }
 }
 
 @Composable
-fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onMovie, modifier = modifier.height(160.dp), shape = RoundedCornerShape(10.dp)) {
+fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier, runtime: Int? = null) {
+    val language = movie.originalLanguage?.takeIf { it.matches(Regex("[a-z]{2,3}")) }?.let {
+        java.util.Locale.forLanguageTag(it).getDisplayLanguage(LocalLocale.current.platformLocale)
+    }
+    val duration = runtime?.takeIf { it > 0 }?.let {
+        if (it >= 60) stringResource(R.string.runtime_short_hours, it / 60, it % 60) else stringResource(R.string.runtime_short_minutes, it)
+    }
+    val height = 160.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
+    Card(onClick = onMovie, modifier = modifier.height(height).testTag("featured-card-${movie.id}"), shape = RoundedCornerShape(MovieStyle.Corner)) {
         Box(Modifier.fillMaxSize()) {
             MovieImage(tmdbImage(movie.backdropPath ?: movie.posterPath, "w780"), null, Modifier.fillMaxSize())
             Box(
@@ -182,17 +208,26 @@ fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, mod
                     Brush.horizontalGradient(listOf(Color.Black.copy(alpha = .85f), Color.Black.copy(alpha = .60f))),
                 ),
             )
-            Column(Modifier.align(Alignment.TopStart).padding(12.dp).fillMaxWidth(.72f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(movie.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (movie.releaseDate.isNotBlank()) Text(movie.releaseDate, style = MaterialTheme.typography.bodySmall)
             }
             if (movie.voteCount > 0) Row(
-                Modifier.align(Alignment.TopEnd).padding(10.dp), verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Default.Star, null, Modifier.size(16.dp), tint = MovieStyle.Rating)
                 Text(stringResource(R.string.rating_value, movie.rating), style = MaterialTheme.typography.labelSmall)
             }
-            PlayButton(onPlay, Modifier.align(Alignment.BottomEnd).padding(8.dp).testTag("featured-play-${movie.id}"))
+            }
+            Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 12.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    listOfNotNull(duration, language?.takeIf(String::isNotBlank)).joinToString(" · "),
+                    modifier = Modifier.weight(1f).testTag("featured-metadata-${movie.id}"),
+                    style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+                PlayButton(onPlay, Modifier.testTag("featured-play-${movie.id}"), visualSize = 40.dp)
+            }
         }
     }
 }

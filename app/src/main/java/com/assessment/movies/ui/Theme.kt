@@ -28,6 +28,7 @@ object MovieStyle {
     val SkeletonHighlight = Color(0xFF4A4A58)
     val PagePadding = 16.dp
     val Gap = 10.dp
+    val CategoryGap = 8.dp
     val Corner = 10.dp
 }
 

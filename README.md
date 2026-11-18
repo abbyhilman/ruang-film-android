@@ -1,6 +1,6 @@
 # Ruang Film - Android Native Assessment
 
-Aplikasi Kotlin untuk assessment **Option 1: Movies**. Android saja, dengan Jetpack Compose dan pola MVVM (ViewModel + Repository). Katalog gelap dengan font Inter, banner film, chip genre ungu, grid poster dan tombol putar merah mengikuti referensi Figma yang dipilih. Bahasa antarmuka Indonesia; konten mengikuti bahasa default TMDB.
+Aplikasi Kotlin untuk assessment **Option 1: Movies**. Android saja, dengan Jetpack Compose dan pola MVVM (ViewModel + Repository). Katalog gelap memakai font Inter dan token Figma; alignment, banner dan pemilih genre diperbaiki berdasarkan screenshot perangkat. Bahasa antarmuka Indonesia; konten mengikuti bahasa default TMDB.
 
 ## Menjalankan
 
@@ -26,13 +26,13 @@ Laporan lint: `app/build/reports/lint-results-debug.html`.
 
 | User story | Implementasi |
 | --- | --- |
-| Genre resmi film | Chip dan pemilih genre mengambil `/genre/movie/list` |
+| Genre resmi film | Chip dan dialog grid genre mengambil `/genre/movie/list`; dua kolom pada ponsel normal, adaptif untuk layar lebar/teks besar |
 | Discover berdasarkan genre | Grid poster, filter `with_genres`, pagination `/discover/movie` |
 | Informasi utama film | Judul, poster, sinopsis, tahun, durasi, genre, rating, pemeran dan IMDb dari `/movie/{id}?append_to_response=credits` |
 | Ulasan pengguna | Layar ulasan dari `/movie/{id}/reviews`, teks panjang dapat diperluas |
 | Trailer YouTube | Memilih trailer YouTube official terlebih dahulu; dialog pemutar dengan autoplay setelah dipilih, waktu, seek, putar/jeda, tutup dan tautan YouTube |
 | Endless scrolling | Daftar film dan ulasan memuat halaman berikutnya mendekati akhir daftar |
-| Kasus positif/negatif | Skeleton data/kartu/gambar, kosong, gambar hilang, timeout, koneksi gagal, HTTP error, retry, trailer tidak tersedia |
+| Kasus positif/negatif | Skeleton shimmer data/kartu/gambar/player, kosong, gambar hilang, timeout, koneksi gagal, HTTP error, retry, trailer tidak tersedia |
 
 Alur: **Katalog / Pencarian -> Detail -> Ulasan / Dialog trailer**. Pencarian menggunakan `/search/movie` dengan debounce 350 ms, pembatalan request lama dan pagination. Ikon hati menyimpan ID film secara lokal; tombol share membuka lembar berbagi Android. Avatar tamu membuka informasi aplikasi dan atribusi.
 
@@ -54,14 +54,18 @@ app/src/test/              test pagination, repository HTTP, ViewModel dan navig
 - Pagination khusus yang kecil: satu request aktif per daftar, deduplikasi berdasarkan ID, retry halaman yang sama, mempertahankan hasil sebelumnya, berhenti pada halaman terakhir/hasil kosong/batas halaman 500 TMDB.
 - Detail dan trailer dimuat terpisah: kegagalan trailer tidak menghilangkan informasi film.
 - Tidak ada retry otomatis tanpa batas. Pengguna memicu retry untuk error; scrolling tidak mengulang request yang gagal secara terus-menerus.
-- Poster, banner, foto pemeran dan avatar memakai satu komponen Coil, ruang gambar tetap, skeleton saat memuat dan fallback ketika gambar hilang/gagal.
+- Header, pencarian, banner pertama, genre dan poster memakai margin konten 16 dp yang sama. Tombol play banner berbentuk lingkaran 40 dp dalam target sentuh 48 dp.
+- Kategori Home memakai LazyRow berlabel satu baris sesuai panjang isi, gap 8 dp dan target minimum 48 dp. Genre yang tersedia tetap tampil ketika film filter berikutnya memuat; state scroll dipertahankan di luar cabang loading. Tidak ada fixed width atau perubahan clipping. Dialog grid genre tetap mendukung label dua baris.
+- Banner menampilkan bahasa asli dari metadata TMDB. Durasi diambil hanya untuk banner yang sedang terlihat melalui endpoint detail yang sudah ada. Cache memori LRU maksimal 40 detail dipakai kembali ketika film dibuka; kegagalan metadata opsional tidak menghilangkan katalog.
+- Poster, banner, foto pemeran dan avatar memakai satu komponen Coil, ruang gambar tetap, shimmer saat memuat dan fallback ketika gambar hilang/gagal. Shimmer juga menandai pencarian yang sedang memuat; kolom tetap dapat diedit. Animasi berhenti ketika tidak memuat/layar tidak aktif dan memakai placeholder statis bila animasi sistem dimatikan.
 - Trailer menggunakan YouTube IFrame API dengan autoplay yang diminta setelah aksi pengguna, origin/referrer aplikasi, validasi ID, file/content access dimatikan dan mixed content ditolak. Indikator waktu mengambil posisi/durasi asli; kontrol aktif setelah player siap. Pemutaran dijeda saat aplikasi masuk background dan WebView dihancurkan ketika dialog ditutup.
 - Dialog mengikuti layar portrait; video mempertahankan proporsi aslinya. YouTube tetap dapat membatasi autoplay atau embed; kontrol putar dan tautan YouTube menyediakan alternatif. Waktu ditampilkan `--:--` sampai data player tersedia, dan loading player yang tidak merespons dibatasi 20 detik.
+- WebView dibuat oleh factory AndroidView dan memuat HTML setelah attach/layout. Area media tepat 16:9, tanpa clipping membulat di sekitar media. Renderer yang berhenti ditangani dengan pelepasan view dan pilihan muat ulang; membuka YouTube menjeda pemutar dalam aplikasi. Build debug mencatat hardware acceleration, ukuran dan versi provider pada tag Logcat `TrailerPlayer`, tanpa URL atau token.
 - Review dirender sebagai teks, bukan HTML dari API.
 
 ## Teknologi
 
-AGP 9.5.1 (built-in Kotlin), Compose compiler 2.4.21, Gradle 9.6.0, Compose BOM 2026.09.00, Lifecycle 2.11.0, Activity Compose 1.13.0, Navigation Compose 2.10.2, Coroutines 1.11.0, Retrofit 3.0.0, OkHttp 5.5.1, Coil 3.6.3. Gradle 9.6.0 dipilih mengikuti versi default yang didokumentasikan untuk AGP 9.5, meskipun ada Gradle yang lebih baru. Versi dipatok; dependency transitif ditentukan Gradle.
+AGP 9.5.1 (built-in Kotlin), Compose compiler 2.4.21, Gradle 9.6.0, Compose BOM 2026.09.00, Lifecycle 2.11.0, Activity Compose 1.13.0, Core Splashscreen 1.2.0, Navigation Compose 2.10.2, Coroutines 1.11.0, Retrofit 3.0.0, OkHttp 5.5.1, Coil 3.6.3. Gradle 9.6.0 dipilih mengikuti versi default yang didokumentasikan untuk AGP 9.5, meskipun ada Gradle yang lebih baru. Versi dipatok; dependency transitif ditentukan Gradle.
 
 ## Konfigurasi dan batasan
 
@@ -71,14 +75,19 @@ AGP 9.5.1 (built-in Kotlin), Compose compiler 2.4.21, Gradle 9.6.0, Compose BOM 
 - Tidak ada katalog offline persisten. Coil mengelola cache gambar; koneksi internet dan akses TMDB dibutuhkan untuk data film.
 - Ketersediaan review, poster dan trailer mengikuti data TMDB. Beberapa trailer dapat menolak embed; tombol YouTube menyediakan alternatif.
 - APK debug untuk evaluasi, bukan release bertanda tangan untuk Play Store.
-- Ikon launcher memakai ikon slideshow bawaan Android; identitas aplikasi di dalam UI berupa nama teks.
+- Logo A, Ruang R, dipilih pemilik proyek. Master SVG dan palette ada di `brand/`; launcher memakai adaptive foreground/background, monochrome pada launcher pendukung Android 13+, serta PNG lima density.
+- AndroidX mengelola splash sistem dan post-theme. Overlay Compose kemudian membuka Home langsung melalui lubang R yang membesar 900 ms; tidak memakai screenshot atau delay menunggu jaringan. Animasi dilewati saat recreation, setelah background, atau bila animator sistem mati. Logo/warna native dan path animasi diperiksa melalui test.
 - Source tersedia di [GitHub](https://github.com/abbyhilman/ruang-film-android). Pengembangan dan pengumpulan perubahan menggunakan branch `main` sesuai pilihan pemilik proyek.
 
 ## Pengujian dan dokumentasi
 
 Test menggunakan MockWebServer untuk batas HTTP, coroutine test untuk state/pagination, serta Robolectric + Compose untuk alur UI tanpa perangkat fisik. Semua film, penulis dan ulasan berlabel Fixture hanya terdapat dalam source test, tidak dalam aplikasi.
 
-Verifikasi 2026-11-17: build debug berhasil, 45 test lulus, lint 0 error dan 1 warning informasi Gradle lebih baru, tanda tangan APK debug valid v2. Laporan pengujian dan lint tersedia pada path di bagian Menjalankan. Screenshot native fixture mencakup katalog/detail/ulasan/dialog pada 430 dp, katalog 600 dp, serta layar 320 dp dengan teks 150%. Smoke test HTTP langsung ke TMDB berhasil untuk genre, discover halaman 1/2, pencarian, detail termasuk credits/IMDb, ulasan halaman 1/2, metadata trailer dan CDN poster. Rendering gambar asli dan playback YouTube di perangkat/emulator belum diverifikasi.
+Verifikasi 2026-11-18: build debug berhasil, 66 test lulus tanpa failure/error/skipped, lint 0 error/1 warning informasi Gradle, tanda tangan APK v2 valid. Laporan pengujian dan lint tersedia pada path di bagian Menjalankan. Screenshot native fixture mencakup katalog/detail/ulasan/dialog pada 430 dp, katalog 600 dp, serta layar 320 dp dengan teks 150%. Lima test kategori tambahan memeriksa swipe, item terakhir, label tanpa truncation, margin/gap/target sentuh, filter saat loading dan kembali dari detail pada 320/360/430/800 dp, density mdpi/xhdpi/xxhdpi dan font hingga 200%. Test sebelumnya mencakup shimmer, alignment, grid genre, cache metadata, lifecycle pemutar, pixel cutout yang menampilkan live content, akhir reveal seluruh layar, reduced motion, durasi dan pemulihan interaksi Home. Adaptive icon diperiksa pada API 26 dan API 35; ini bukan pengujian seluruh alur aplikasi pada Android 8. Smoke test HTTP TMDB sebelumnya berhasil untuk endpoint assessment; tidak diulang untuk perubahan layout kategori.
+
+Screenshot pengguna membuktikan masalah trailer bersuara tetapi gambar hitam pada build sebelumnya. Penyebab compositor/decoder pada perangkat itu belum terbukti. Perubahan layout/lifecycle pemutar telah diterapkan, tetapi keberhasilan gambar video bergerak dan sinkronisasi audio belum diverifikasi pada perangkat/emulator. ADB tidak mendeteksi perangkat dan SDK emulator belum tersedia; perbaikan rendering tetap berstatus perlu uji perangkat.
+
+Handoff splash sistem, cold/warm/rotasi pada launcher/vendor nyata dan frame pacing juga belum diperiksa pada perangkat. Test Compose membuktikan mask dan state startup dalam fixture, tanpa menyatakan angka fps.
 
 ## Sumber resmi dan atribusi
 

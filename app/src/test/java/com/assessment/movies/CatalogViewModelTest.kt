@@ -92,6 +92,23 @@ class CatalogViewModelTest {
         assertEquals(28, model.movies.value.items.single().id)
         assertNull(model.genres.value.error)
     }
+
+    @Test fun `visible banner loads metadata once and ignores stale detail after changing genre`() = runTest(dispatcher) {
+        val repo = CatalogFixture()
+        val model = CatalogViewModel(repo)
+        advanceUntilIdle()
+        model.loadFeatured(28); runCurrent()
+        model.loadFeatured(28); runCurrent()
+        assertEquals(listOf(28), repo.detailCalls)
+        model.selectGenre(35); advanceUntilIdle()
+        model.loadFeatured(35); advanceUntilIdle()
+        repo.oldDetail.complete(MovieDetail(repo.movie(28), "", emptyList(), 200))
+        advanceUntilIdle()
+        assertEquals(35, model.featuredDetail.value?.movie?.id)
+        assertEquals(99, model.featuredDetail.value?.runtime)
+        model.search("new"); advanceUntilIdle()
+        assertNull(model.featuredDetail.value)
+    }
 }
 
 private class CatalogFixture : MovieRepository {
@@ -100,6 +117,8 @@ private class CatalogFixture : MovieRepository {
     val searchCalls = mutableListOf<String>()
     val oldPage = CompletableDeferred<Page<Movie>>()
     val oldSearch = CompletableDeferred<Page<Movie>>()
+    val oldDetail = CompletableDeferred<MovieDetail>()
+    val detailCalls = mutableListOf<Int>()
     fun movie(id: Int) = Movie(id, "Fixture $id", null, "", 0.0, 0)
     override suspend fun genres(): List<Genre> {
         if (failGenres) throw IOException()
@@ -114,7 +133,10 @@ private class CatalogFixture : MovieRepository {
         searchCalls += query
         return if (query == "old") oldSearch.await() else Page(listOf(movie(200)), page, 1)
     }
-    override suspend fun detail(movieId: Int): MovieDetail = error("Not used")
+    override suspend fun detail(movieId: Int): MovieDetail {
+        detailCalls += movieId
+        return if (movieId == 28) oldDetail.await() else MovieDetail(movie(movieId), "", emptyList(), 99)
+    }
     override suspend fun reviews(movieId: Int, page: Int): Page<Review> = error("Not used")
     override suspend fun trailer(movieId: Int): Trailer? = null
 }

@@ -116,6 +116,8 @@ class MovieAppTest {
         openMovie()
         compose.onNodeWithContentDescription("Tonton trailer").performClick()
         compose.onNodeWithTag("trailer-dialog").assertIsDisplayed()
+        val videoBounds = compose.onNodeWithTag("video-surface").fetchSemanticsNode().boundsInRoot
+        assertEquals(16f / 9f, videoBounds.width / videoBounds.height, .02f)
         compose.onNodeWithTag("video-time").assertIsDisplayed()
         screenshot("video-popup")
         compose.onNodeWithText("Buka di YouTube").performScrollTo().performClick()
@@ -123,6 +125,9 @@ class MovieAppTest {
         compose.onNodeWithContentDescription("Tutup trailer").performScrollTo().performClick()
         compose.onNodeWithTag("trailer-dialog").assertDoesNotExist()
         compose.onNodeWithTag("detail-list").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tonton trailer").performClick()
+        compose.onNodeWithTag("trailer-dialog").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Tutup trailer").performClick()
     }
 
     @Test fun `popup remains closable while trailer metadata loads`() {

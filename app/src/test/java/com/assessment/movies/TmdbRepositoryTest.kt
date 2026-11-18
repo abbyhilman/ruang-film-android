@@ -68,6 +68,16 @@ class TmdbRepositoryTest {
         assertEquals("/3/movie/7/reviews?page=1", server.takeRequest().path)
     }
 
+    @Test fun `banner metadata and later detail reuse the same cached response`() = runTest {
+        respond("""{"id":7,"title":"Fixture film","runtime":151,"original_language":"ja"}""")
+        val first = repository.detail(7)
+        val opened = repository.detail(7)
+        assertSame(first, opened)
+        assertEquals(151, first.runtime)
+        assertEquals("ja", first.movie.originalLanguage)
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun `trailer prefers official YouTube trailer and ignores other sites and invalid keys`() = runTest {
         respond("""{"results":[
           {"site":"YouTube","type":"Trailer","key":"abcdefghijk","official":false,"name":"Unofficial fixture"},

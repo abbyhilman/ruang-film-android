@@ -63,4 +63,8 @@
     <string name="error_generic">Data belum dapat dimuat. Silakan coba lagi.</string>
     <string name="video_position">Posisi video</string>
     <string name="rating_value">%1$.1f</string>
+    <string name="runtime_short_hours">%1$d j %2$d mnt</string>
+    <string name="runtime_short_minutes">%1$d mnt</string>
+    <string name="retry_player">Muat ulang pemutar</string>
+    <string name="video_not_visible">Video tidak terlihat? Buka di YouTube.</string>
 </resources>

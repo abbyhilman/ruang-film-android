@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.animation.ValueAnimator
+import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -36,10 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.content.edit
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -62,10 +66,26 @@ import com.assessment.movies.ui.ReviewsViewModel
 import com.assessment.movies.ui.components.MovieImage
 import com.assessment.movies.ui.components.TrailerDialog
 import com.assessment.movies.ui.movieViewModelFactory
+import com.assessment.movies.ui.branding.StartupRevealState
+import com.assessment.movies.ui.branding.StartupRevealHost
+import androidx.compose.ui.res.painterResource
 
 class MainActivity : ComponentActivity() {
+    private lateinit var startup: StartupRevealState
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        startup = StartupRevealState(initiallyVisible = savedInstanceState == null)
+        if (startup.visible) splash.setOnExitAnimationListener { provider ->
+            val icon = provider.iconView
+            val iconLocation = IntArray(2).also(icon::getLocationOnScreen)
+            val contentLocation = IntArray(2).also { findViewById<View>(android.R.id.content).getLocationOnScreen(it) }
+            val left = (iconLocation[0] - contentLocation[0]).toFloat()
+            val top = (iconLocation[1] - contentLocation[1]).toFloat()
+            startup.handoff(Rect(left, top, left + icon.width, top + icon.height), ValueAnimator.areAnimatorsEnabled())
+            provider.remove()
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -75,13 +95,20 @@ class MainActivity : ComponentActivity() {
         val initial = saved.getStringSet("ids", emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }
         setContent {
             MovieTheme {
-                MovieApp(
-                    repository, ::openExternal, initial,
-                    onFavoritesChanged = { ids -> saved.edit { putStringSet("ids", ids.map(Int::toString).toSet()) } },
-                    onShare = ::shareMovie,
-                )
+                StartupRevealHost(startup) {
+                    MovieApp(
+                        repository, ::openExternal, initial,
+                        onFavoritesChanged = { ids -> saved.edit { putStringSet("ids", ids.map(Int::toString).toSet()) } },
+                        onShare = ::shareMovie,
+                    )
+                }
             }
         }
+    }
+
+    override fun onStop() {
+        if (::startup.isInitialized) startup.finish()
+        super.onStop()
     }
 
     private fun openExternal(uri: Uri) {
@@ -135,12 +162,14 @@ fun MovieApp(
                     val movies by model.movies.collectAsStateWithLifecycle()
                     val query by model.query.collectAsStateWithLifecycle()
                     val genreId by model.genreId.collectAsStateWithLifecycle()
+                    val featuredDetail by model.featuredDetail.collectAsStateWithLifecycle()
                     CatalogScreen(
                         genres, movies, genreId, query, model::search, model::selectGenre,
                         model::reloadGenres, model::loadNext,
                         onMovie = { nav.navigate("detail/${it.id}") { launchSingleTop = true } },
                         onPlay = { nav.navigate("detail/${it.id}?play=true") { launchSingleTop = true } },
                         onProfile = { showAbout = true },
+                        featuredDetail = featuredDetail, onFeaturedVisible = model::loadFeatured,
                     )
                 }
                 composable(
@@ -186,7 +215,12 @@ fun MovieApp(
 private fun AboutDialog(onDismiss: () -> Unit, openExternal: (Uri) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.app_name)) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(painterResource(R.drawable.brand_mark), null, Modifier.size(32.dp), tint = com.assessment.movies.ui.MovieStyle.Gold)
+                Text(stringResource(R.string.app_name))
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 MovieImage("file:///android_asset/tmdb-logo.svg", stringResource(R.string.tmdb_logo), Modifier.size(124.dp, 32.dp), contentScale = ContentScale.Fit, fallbackText = "TMDB")

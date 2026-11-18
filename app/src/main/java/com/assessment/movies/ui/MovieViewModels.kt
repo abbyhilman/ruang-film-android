@@ -26,6 +26,10 @@ class CatalogViewModel(private val repository: MovieRepository) : ViewModel() {
     val query = mutableQuery.asStateFlow()
     private val mutableGenreId = MutableStateFlow<Int?>(null)
     val genreId = mutableGenreId.asStateFlow()
+    private val mutableFeaturedDetail = MutableStateFlow<MovieDetail?>(null)
+    val featuredDetail = mutableFeaturedDetail.asStateFlow()
+    private var featuredJob: Job? = null
+    private var featuredId: Int? = null
     private var lastGenreId = 28
     private var genresJob: Job? = null
     private var pageJob: Job? = null
@@ -52,6 +56,7 @@ class CatalogViewModel(private val repository: MovieRepository) : ViewModel() {
     fun selectGenre(id: Int) {
         require(id > 0)
         searchJob?.cancel()
+        clearFeatured()
         mutableQuery.value = ""
         mutableGenreId.value = id
         lastGenreId = id
@@ -61,6 +66,7 @@ class CatalogViewModel(private val repository: MovieRepository) : ViewModel() {
     fun search(text: String) {
         if (text == mutableQuery.value) return
         mutableQuery.value = text
+        clearFeatured()
         searchJob?.cancel()
         pageJob?.cancel()
         collectJob?.cancel()
@@ -90,6 +96,23 @@ class CatalogViewModel(private val repository: MovieRepository) : ViewModel() {
         val current = loader ?: return
         if (pageJob?.isActive == true) return
         pageJob = viewModelScope.launch { current.loadNext() }
+    }
+
+    fun loadFeatured(movieId: Int) {
+        if (movieId == featuredId || mutableQuery.value.isNotBlank() || mutableMovies.value.items.take(5).none { it.id == movieId }) return
+        featuredJob?.cancel()
+        featuredId = movieId
+        mutableFeaturedDetail.value = null
+        featuredJob = viewModelScope.launch {
+            val result = load { repository.detail(movieId) }
+            if (featuredId == movieId) mutableFeaturedDetail.value = result.data
+        }
+    }
+
+    private fun clearFeatured() {
+        featuredJob?.cancel()
+        featuredId = null
+        mutableFeaturedDetail.value = null
     }
 }
 
