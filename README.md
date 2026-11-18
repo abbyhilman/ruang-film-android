@@ -2,6 +2,10 @@
 
 Aplikasi Kotlin untuk assessment **Option 1: Movies**. Android saja, dengan Jetpack Compose dan pola MVVM (ViewModel + Repository). Katalog gelap memakai font Inter dan token Figma; alignment, banner dan pemilih genre diperbaiki berdasarkan screenshot perangkat. Bahasa antarmuka Indonesia; konten mengikuti bahasa default TMDB.
 
+## Download APK untuk pengujian
+
+Untuk mencoba aplikasi, unduh [APK Ruang Film melalui Google Drive](https://drive.google.com/file/d/1lomYqAPuc9BOyYS9W8J1K8TRunP2hovp/view?usp=sharing).
+
 ## Menjalankan
 
 1. Buka folder ini melalui Android Studio yang mendukung AGP 9.5.
