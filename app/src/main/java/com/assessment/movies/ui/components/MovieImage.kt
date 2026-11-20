@@ -15,8 +15,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
 import coil3.svg.SvgDecoder
+import coil3.Image
 import com.assessment.movies.R
 import com.assessment.movies.ui.MovieStyle
 
@@ -27,10 +29,13 @@ fun MovieImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     fallbackText: String = stringResource(R.string.poster_missing),
+    memoryCacheKey: String? = null,
+    onImageLoaded: ((Image) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val request = remember(model, context) {
+    val request = remember(model, context, memoryCacheKey) {
         ImageRequest.Builder(context).data(model).apply {
+            if (memoryCacheKey != null) memoryCacheKey(memoryCacheKey).placeholderMemoryCacheKey(memoryCacheKey)
             if (model?.substringBefore('?')?.endsWith(".svg") == true) decoderFactory(SvgDecoder.Factory())
         }.build()
     }
@@ -43,7 +48,11 @@ fun MovieImage(
                 contentDescription = description,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
-                loading = { SkeletonBlock(Modifier.fillMaxSize()) },
+                onSuccess = { onImageLoaded?.invoke(it.result.image) },
+                loading = { state ->
+                    if (state.painter != null) SubcomposeAsyncImageContent()
+                    else SkeletonBlock(Modifier.fillMaxSize())
+                },
                 error = { ImageFallback(fallbackText) },
             )
         }

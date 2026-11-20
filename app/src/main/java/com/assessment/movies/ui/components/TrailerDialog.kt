@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,8 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -54,7 +51,6 @@ import com.assessment.movies.ui.StatusMessage
 import com.google.gson.JsonParser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import java.util.Locale
 
 @Composable
 fun TrailerDialog(
@@ -93,7 +89,6 @@ fun TrailerDialog(
 private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit, onRetry: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var playback by remember(videoKey) { mutableStateOf(PlaybackState()) }
-    var seekPosition by remember(videoKey) { mutableStateOf<Float?>(null) }
     val session = remember(videoKey) { TrailerPlayerSession(videoKey) { playback = playback.copy(error = it) } }
     DisposableEffect(session, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -130,27 +125,6 @@ private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit, onRetry
             )
             if (!playback.ready && playback.error == 0) PlayerSkeleton(Modifier.fillMaxSize())
         }
-    val ready = playback.ready && playback.duration > 0 && playback.error == 0
-    val seekLabel = stringResource(R.string.video_position)
-    Slider(
-        value = (seekPosition ?: playback.position.toFloat()).coerceIn(0f, maxOf(1f, playback.duration.toFloat())),
-        onValueChange = { seekPosition = it },
-        onValueChangeFinished = {
-            seekPosition?.let { session.evaluate("window.moviePlayer?.seekTo(${it.toDouble()},true)") }
-            seekPosition = null
-        },
-        valueRange = 0f..maxOf(1f, playback.duration.toFloat()), enabled = ready,
-        modifier = Modifier.testTag("video-seek").semantics { contentDescription = seekLabel },
-    )
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            if (ready) "${formatPlaybackTime(playback.position)} / ${formatPlaybackTime(playback.duration)}" else "--:-- / --:--",
-            Modifier.weight(1f).testTag("video-time"), style = MaterialTheme.typography.bodySmall,
-        )
-        TextButton(enabled = playback.ready && playback.error == 0, onClick = {
-            session.evaluate(if (playback.playing) "window.moviePlayer?.pauseVideo()" else "window.moviePlayer?.playVideo()")
-        }) { Text(stringResource(if (playback.playing) R.string.pause_video else R.string.play_video)) }
-    }
     if (playback.error != 0) {
         Text(stringResource(R.string.trailer_error), style = MaterialTheme.typography.bodyMedium)
         TextButton(onClick = onRetry) { Text(stringResource(R.string.retry_player)) }
@@ -162,7 +136,7 @@ private fun YouTubePlayer(videoKey: String, openExternal: (Uri) -> Unit, onRetry
     Text(stringResource(R.string.video_not_visible), style = MaterialTheme.typography.bodySmall, color = MovieStyle.Muted)
 }
 
-internal data class PlaybackState(val ready: Boolean = false, val playing: Boolean = false, val position: Double = 0.0, val duration: Double = 0.0, val error: Int = 0)
+internal data class PlaybackState(val ready: Boolean = false, val error: Int = 0)
 
 internal fun parsePlaybackState(raw: String?): PlaybackState? {
     if (raw == null) return null
@@ -170,15 +144,8 @@ internal fun parsePlaybackState(raw: String?): PlaybackState? {
         val outer = JsonParser.parseString(raw)
         if (outer.isJsonNull) return@runCatching null
         val data = if (outer.isJsonPrimitive) JsonParser.parseString(outer.asString).asJsonObject else outer.asJsonObject
-        fun seconds(name: String): Double = data[name]?.asDouble?.takeIf { it.isFinite() }?.coerceIn(0.0, 172800.0) ?: 0.0
-        PlaybackState(data["ready"]?.asBoolean == true, data["playing"]?.asBoolean == true, seconds("position"), seconds("duration"), data["error"]?.asInt ?: 0)
+        PlaybackState(data["ready"]?.asBoolean == true, data["error"]?.asInt ?: 0)
     }.getOrNull()
-}
-
-internal fun formatPlaybackTime(seconds: Double): String {
-    val value = if (seconds.isFinite()) seconds.coerceIn(0.0, 172800.0).toInt() else 0
-    return if (value >= 3600) String.format(Locale.ROOT, "%d:%02d:%02d", value / 3600, value / 60 % 60, value % 60)
-    else String.format(Locale.ROOT, "%d:%02d", value / 60, value % 60)
 }
 
 internal const val PLAYER_ORIGIN = "https://com.assessment.movies/"
@@ -192,17 +159,15 @@ internal fun trailerHtml(key: String): String {
         <style>html,body,main{margin:0;width:100%;height:100%;overflow:hidden;background:#000}iframe{position:absolute;inset:0;display:block;border:0;width:100%;height:100%}</style>
         </head><body><main>
         <iframe id="player" title="Trailer YouTube" width="640" height="360"
-        src="https://www.youtube.com/embed/$key?autoplay=1&amp;controls=1&amp;fs=0&amp;playsinline=1&amp;enablejsapi=1&amp;origin=https%3A%2F%2Fcom.assessment.movies"
-        allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        src="https://www.youtube.com/embed/$key?autoplay=1&amp;controls=1&amp;fs=1&amp;playsinline=1&amp;enablejsapi=1&amp;origin=https%3A%2F%2Fcom.assessment.movies"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
         </main><script>
         window.videoState={ready:false,error:0};window.moviePlayer=null;
         function onYouTubeIframeAPIReady(){window.moviePlayer=new YT.Player('player',{events:{
           onReady:function(event){window.videoState.ready=true;event.target.playVideo();},
           onError:function(event){window.videoState.error=event.data;}
         }});}
-        window.readMovieState=function(){var p=window.moviePlayer,s=window.videoState;
-          return JSON.stringify({ready:s.ready,error:s.error,playing:s.ready&&p.getPlayerState()===1,
-          position:s.ready?p.getCurrentTime():0,duration:s.ready?p.getDuration():0});};
+        window.readMovieState=function(){return JSON.stringify(window.videoState);};
         </script><script async src="https://www.youtube.com/iframe_api"></script></body></html>
     """.trimIndent()
 }

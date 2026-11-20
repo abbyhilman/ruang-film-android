@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.util.Log
 import android.view.ViewGroup
+import android.view.View
 import android.view.View.OnLayoutChangeListener
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -18,6 +19,7 @@ import com.assessment.movies.BuildConfig
 internal class TrailerPlayerSession(private val key: String, private val onError: (Int) -> Unit) {
     private var browser: WebView? = null
     private var destroyed = false
+    private val fullscreen = TrailerFullscreenHost()
 
     @SuppressLint("SetJavaScriptEnabled")
     fun create(context: Context, openExternal: (android.net.Uri) -> Unit): WebView {
@@ -51,13 +53,18 @@ internal class TrailerPlayerSession(private val key: String, private val onError
             settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.mediaPlaybackRequiresUserGesture = false
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                    if (destroyed) callback.onCustomViewHidden() else fullscreen.show(context, view, callback)
+                }
+                override fun onHideCustomView() { fullscreen.hide() }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     if (!request.isForMainFrame) return false
                     val uri = request.url
                     if (uri.scheme == "https" && uri.host == "com.assessment.movies") return false
-                    if (uri.scheme == "https") { pause(); openExternal(uri) }
+                    if (uri.scheme == "https") { fullscreen.hide(); pause(); openExternal(uri) }
                     return true
                 }
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -88,6 +95,7 @@ internal class TrailerPlayerSession(private val key: String, private val onError
     private fun destroy(view: WebView, stopLoading: Boolean) {
         if (destroyed) return
         destroyed = true
+        fullscreen.hide()
         browser = null
         if (stopLoading) view.stopLoading()
         view.destroy()

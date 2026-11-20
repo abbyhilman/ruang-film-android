@@ -13,8 +13,6 @@
     <string name="loading_catalog">Memuat daftar film</string>
     <string name="loading_video">Memuat video…</string>
     <string name="close_trailer">Tutup trailer</string>
-    <string name="play_video">Putar</string>
-    <string name="pause_video">Jeda</string>
     <string name="cast">Pemeran</string>
     <string name="open_imdb">Buka IMDb</string>
     <string name="open_tmdb">Lihat di TMDB</string>
@@ -50,7 +48,7 @@
     <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="visit_tmdb">Kunjungi TMDB</string>
     <string name="open_youtube">Buka di YouTube</string>
-    <string name="player_hint">Trailer diputar otomatis. Jika pemutaran dibatasi, tekan Putar atau buka di YouTube.</string>
+    <string name="player_hint">Gunakan kontrol di pemutar YouTube untuk putar, jeda, dan geser waktu video.</string>
     <string name="trailer_error">Video tidak dapat dimuat. Coba lagi atau buka di YouTube.</string>
     <string name="cannot_open_link">Tidak ada aplikasi yang dapat membuka tautan ini.</string>
     <string name="error_network">Tidak dapat terhubung. Periksa koneksi internet lalu coba lagi.</string>
@@ -61,7 +59,6 @@
     <string name="error_not_found">Film yang dicari tidak tersedia.</string>
     <string name="error_server">Layanan film sedang bermasalah. Silakan coba lagi.</string>
     <string name="error_generic">Data belum dapat dimuat. Silakan coba lagi.</string>
-    <string name="video_position">Posisi video</string>
     <string name="rating_value">%1$.1f</string>
     <string name="runtime_short_hours">%1$d j %2$d mnt</string>
     <string name="runtime_short_minutes">%1$d mnt</string>

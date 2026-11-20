@@ -49,6 +49,7 @@ import com.assessment.movies.ui.components.MovieSearchField
 import com.assessment.movies.ui.components.PosterCardSkeleton
 import com.assessment.movies.ui.components.ProfileHeader
 import com.assessment.movies.ui.components.SkeletonBlock
+import com.assessment.movies.ui.components.MovieArtworkTransition
 
 @Composable
 fun CatalogScreen(
@@ -65,12 +66,22 @@ fun CatalogScreen(
     onProfile: () -> Unit,
     featuredDetail: MovieDetail? = null,
     onFeaturedVisible: (Int) -> Unit = {},
+    onFeaturedMovie: (Movie) -> Unit = onMovie,
+    artworkTransition: MovieArtworkTransition? = null,
 ) {
     var chooseGenre by rememberSaveable { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val genreRowState = rememberLazyListState()
+    var appliedQuery by rememberSaveable { mutableStateOf(query) }
+    var appliedGenreId by rememberSaveable { mutableStateOf(selectedGenreId) }
     LoadMoreOnScroll(movies, gridState, loadNext)
-    LaunchedEffect(query, selectedGenreId) { gridState.scrollToItem(0) }
+    LaunchedEffect(query, selectedGenreId) {
+        if (query != appliedQuery || selectedGenreId != appliedGenreId) {
+            appliedQuery = query
+            appliedGenreId = selectedGenreId
+            gridState.scrollToItem(0)
+        }
+    }
     val initialLoading = genres.loading || (!movies.loaded && movies.error == null && (genres.error == null || query.isNotBlank()))
     val loadingLabel = stringResource(R.string.loading_catalog)
     LazyVerticalGrid(
@@ -111,7 +122,7 @@ fun CatalogScreen(
             item(span = { GridItemSpan(maxLineSpan) }) { StatusMessage(stringResource(R.string.no_genres)) }
         } else {
             if (query.isBlank() && movies.items.isNotEmpty()) item(key = "featured", span = { GridItemSpan(maxLineSpan) }) {
-                FeaturedCarousel(movies.items.take(5), onMovie, onPlay, featuredDetail, onFeaturedVisible)
+                FeaturedCarousel(movies.items.take(5), onFeaturedMovie, onPlay, featuredDetail, onFeaturedVisible, artworkTransition)
             }
             if (!genres.data.isNullOrEmpty()) item(key = "genres", span = { GridItemSpan(maxLineSpan) }) {
                 GenreCategoryRow(genres.data, selectedGenreId, onGenre, state = genreRowState)
@@ -119,7 +130,7 @@ fun CatalogScreen(
             if (query.isNotBlank()) item(key = "results-title", span = { GridItemSpan(maxLineSpan) }) {
                 SectionHeading(stringResource(R.string.search_results))
             }
-            items(movies.items, key = { it.id }) { movie -> MoviePosterCard(movie, onClick = { onMovie(movie) }) }
+            items(movies.items, key = { it.id }) { movie -> MoviePosterCard(movie, onClick = { onMovie(movie) }, artworkTransition = artworkTransition) }
             if (movies.loading && movies.items.isNotEmpty()) items(2, key = { "append-skeleton-$it" }) { PosterCardSkeleton() }
             item(key = "footer", span = { GridItemSpan(maxLineSpan) }) {
                 when {
@@ -141,7 +152,7 @@ fun CatalogScreen(
 }
 
 @Composable
-private fun FeaturedCarousel(movies: List<Movie>, onMovie: (Movie) -> Unit, onPlay: (Movie) -> Unit, detail: MovieDetail?, onVisible: (Int) -> Unit) {
+private fun FeaturedCarousel(movies: List<Movie>, onMovie: (Movie) -> Unit, onPlay: (Movie) -> Unit, detail: MovieDetail?, onVisible: (Int) -> Unit, artworkTransition: MovieArtworkTransition?) {
     val pager = rememberPagerState { movies.size }
     val selected = movies[pager.settledPage.coerceIn(movies.indices)]
     LaunchedEffect(selected.id) { onVisible(selected.id) }
@@ -154,6 +165,7 @@ private fun FeaturedCarousel(movies: List<Movie>, onMovie: (Movie) -> Unit, onPl
             FeaturedMovieCard(
                 movies[page].copy(originalLanguage = movies[page].originalLanguage ?: metadata?.movie?.originalLanguage),
                 { onMovie(movies[page]) }, { onPlay(movies[page]) }, Modifier.fillMaxWidth(), runtime = metadata?.runtime,
+                artworkTransition = artworkTransition,
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {

@@ -152,7 +152,7 @@ fun RatingStars(rating: Double, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modifier, artworkTransition: MovieArtworkTransition? = null) {
     Card(
         onClick = onClick,
         modifier = modifier.testTag("movie-${movie.id}"),
@@ -161,7 +161,11 @@ fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modi
     ) {
         MovieImage(
             tmdbImage(movie.posterPath), stringResource(R.string.poster_description, movie.title),
-            Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
+            Modifier.movieArtworkTransition(movie.id, MovieArtworkOrigin.Poster, artworkTransition)
+                .fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))
+                .movieArtworkMask(movie.id, MovieArtworkOrigin.Poster, artworkTransition),
+            memoryCacheKey = movieArtworkKey(movie.id, MovieArtworkOrigin.Poster),
+            onImageLoaded = artworkTransition?.let { transition -> { image -> transition.prepareMask(movieMaskKey(movie, MovieArtworkOrigin.Poster), image) } },
         )
         Column(
             Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
@@ -170,6 +174,7 @@ fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modi
         ) {
             Text(
                 movie.title, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                modifier = Modifier.movieTitleTransition(movie.id, MovieArtworkOrigin.Poster, artworkTransition),
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             if (movie.voteCount > 0) RatingStars(movie.rating)
@@ -192,7 +197,7 @@ fun PlayButton(onClick: () -> Unit, modifier: Modifier = Modifier, visualSize: D
 }
 
 @Composable
-fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier, runtime: Int? = null) {
+fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, modifier: Modifier = Modifier, runtime: Int? = null, artworkTransition: MovieArtworkTransition? = null) {
     val language = movie.originalLanguage?.takeIf { it.matches(Regex("[a-z]{2,3}")) }?.let {
         java.util.Locale.forLanguageTag(it).getDisplayLanguage(LocalLocale.current.platformLocale)
     }
@@ -202,7 +207,13 @@ fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, mod
     val height = 160.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
     Card(onClick = onMovie, modifier = modifier.height(height).testTag("featured-card-${movie.id}"), shape = RoundedCornerShape(MovieStyle.Corner)) {
         Box(Modifier.fillMaxSize()) {
-            MovieImage(tmdbImage(movie.backdropPath ?: movie.posterPath, "w780"), null, Modifier.fillMaxSize())
+            MovieImage(
+                tmdbImage(movie.backdropPath ?: movie.posterPath, "w780"), null,
+                Modifier.movieArtworkTransition(movie.id, MovieArtworkOrigin.Featured, artworkTransition).fillMaxSize()
+                    .movieArtworkMask(movie.id, MovieArtworkOrigin.Featured, artworkTransition),
+                memoryCacheKey = movieArtworkKey(movie.id, MovieArtworkOrigin.Featured),
+                onImageLoaded = artworkTransition?.let { transition -> { image -> transition.prepareMask(movieMaskKey(movie, MovieArtworkOrigin.Featured), image) } },
+            )
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.horizontalGradient(listOf(Color.Black.copy(alpha = .85f), Color.Black.copy(alpha = .60f))),
@@ -210,7 +221,7 @@ fun FeaturedMovieCard(movie: Movie, onMovie: () -> Unit, onPlay: () -> Unit, mod
             )
             Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(movie.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(movie.title, Modifier.movieTitleTransition(movie.id, MovieArtworkOrigin.Featured, artworkTransition), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (movie.releaseDate.isNotBlank()) Text(movie.releaseDate, style = MaterialTheme.typography.bodySmall)
             }
             if (movie.voteCount > 0) Row(

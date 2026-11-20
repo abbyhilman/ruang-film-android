@@ -118,7 +118,10 @@ class MovieAppTest {
         compose.onNodeWithTag("trailer-dialog").assertIsDisplayed()
         val videoBounds = compose.onNodeWithTag("video-surface").fetchSemanticsNode().boundsInRoot
         assertEquals(16f / 9f, videoBounds.width / videoBounds.height, .02f)
-        compose.onNodeWithTag("video-time").assertIsDisplayed()
+        compose.onNodeWithTag("video-time").assertDoesNotExist()
+        compose.onNodeWithTag("video-seek").assertDoesNotExist()
+        compose.onNodeWithText("Putar", substring = false).assertDoesNotExist()
+        compose.onNodeWithText("Jeda", substring = false).assertDoesNotExist()
         screenshot("video-popup")
         compose.onNodeWithText("Buka di YouTube").performScrollTo().performClick()
         assertEquals("https://www.youtube.com/watch?v=abcdefghijk", opened)

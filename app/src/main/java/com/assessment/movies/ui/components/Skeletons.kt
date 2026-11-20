@@ -77,7 +77,7 @@ fun PosterCardSkeleton(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DetailSkeleton() {
+fun DetailSkeleton(showHero: Boolean = true) {
     Column(
         Modifier.fillMaxWidth().testTag("detail-skeleton").semantics {
             contentDescription = "Memuat detail film"
@@ -85,7 +85,7 @@ fun DetailSkeleton() {
         },
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SkeletonBlock(Modifier.fillMaxWidth().aspectRatio(.9f))
+        if (showHero) SkeletonBlock(Modifier.fillMaxWidth().aspectRatio(.9f))
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             SkeletonBlock(Modifier.fillMaxWidth(.6f).height(20.dp))
             SkeletonBlock(Modifier.fillMaxWidth(.8f).height(26.dp))
