@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.animation.ValueAnimator
-import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -49,7 +48,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -94,16 +92,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        startup = StartupRevealState(initiallyVisible = savedInstanceState == null)
-        if (startup.visible) splash.setOnExitAnimationListener { provider ->
-            val icon = provider.iconView
-            val iconLocation = IntArray(2).also(icon::getLocationOnScreen)
-            val contentLocation = IntArray(2).also { findViewById<View>(android.R.id.content).getLocationOnScreen(it) }
-            val left = (iconLocation[0] - contentLocation[0]).toFloat()
-            val top = (iconLocation[1] - contentLocation[1]).toFloat()
-            startup.handoff(Rect(left, top, left + icon.width, top + icon.height), ValueAnimator.areAnimatorsEnabled())
-            provider.remove()
-        }
+        val launchPreferences = getSharedPreferences("app_startup", MODE_PRIVATE)
+        val lastUpdate = packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+        val firstLaunchAfterInstall = launchPreferences.getLong("last_package_update", -1) != lastUpdate
+        if (firstLaunchAfterInstall) launchPreferences.edit { putLong("last_package_update", lastUpdate) }
+        startup = StartupRevealState(
+            initiallyVisible = (savedInstanceState == null || firstLaunchAfterInstall) && ValueAnimator.areAnimatorsEnabled(),
+        )
+        if (startup.visible) splash.setOnExitAnimationListener { it.remove() }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -169,7 +165,9 @@ fun MovieApp(
     val masks = artworkMasks?.masks?.collectAsStateWithLifecycle()?.value.orEmpty()
     fun openMovie(movie: Movie, origin: MovieArtworkOrigin, play: Boolean = false) {
         if (nav.currentBackStackEntry?.lifecycle?.currentState != Lifecycle.State.RESUMED) return
-        artworkSelection = MovieArtworkSelection(movie, origin, masks[movieMaskKey(movie, origin)])
+        val maskKey = movieMaskKey(movie, origin)
+        artworkMasks?.prioritize(maskKey)
+        artworkSelection = MovieArtworkSelection(movie, origin, masks[maskKey])
         nav.navigate("detail/${movie.id}?play=$play") { launchSingleTop = true }
     }
     val reviewsRoute = current?.destination?.route?.startsWith("reviews/") == true
@@ -194,8 +192,8 @@ fun MovieApp(
             }
             NavHost(
                 navController = nav, startDestination = "catalog",
-                enterTransition = { if (motionEnabled) fadeIn(tween(MovieArtworkTransition.EdgeMillis, delayMillis = MovieArtworkTransition.DurationMillis - MovieArtworkTransition.EdgeMillis)) else EnterTransition.None },
-                exitTransition = { if (motionEnabled) fadeOut(tween(MovieArtworkTransition.EdgeMillis)) else ExitTransition.None },
+                enterTransition = { if (motionEnabled) fadeIn(tween(300)) else EnterTransition.None },
+                exitTransition = { if (motionEnabled) fadeOut(tween(300)) else ExitTransition.None },
             ) {
                 composable("catalog") { entry ->
                     val model: CatalogViewModel = viewModel(entry, factory = movieViewModelFactory { CatalogViewModel(repository) })

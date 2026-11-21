@@ -14,10 +14,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -38,21 +38,6 @@ import com.assessment.movies.ui.MovieStyle
 internal class StartupRevealState(initiallyVisible: Boolean) {
     var visible by mutableStateOf(initiallyVisible)
         private set
-    var started by mutableStateOf(false)
-        private set
-    var nativeIconBounds by mutableStateOf<Rect?>(null)
-        private set
-    var motionAllowed by mutableStateOf(true)
-        private set
-
-    fun handoff(bounds: Rect?, animate: Boolean) {
-        if (!visible) return
-        nativeIconBounds = bounds
-        motionAllowed = animate
-        started = true
-        if (!animate) finish()
-    }
-
     fun finish() { visible = false }
 }
 
@@ -60,25 +45,26 @@ internal class StartupRevealState(initiallyVisible: Boolean) {
 internal fun StartupRevealHost(state: StartupRevealState, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Box(if (state.visible) Modifier.clearAndSetSemantics { } else Modifier) { content() }
-        if (state.visible) BrandRevealOverlay(state.nativeIconBounds, state.started, state.motionAllowed, state::finish)
+        if (state.visible) BrandRevealOverlay(state::finish)
     }
 }
 
 @Composable
-internal fun BrandRevealOverlay(nativeIconBounds: Rect?, started: Boolean, motionEnabled: Boolean, onFinished: () -> Unit) {
+internal fun BrandRevealOverlay(onFinished: () -> Unit) {
     val progress = remember { Animatable(0f) }
     val finish by rememberUpdatedState(onFinished)
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
-    LaunchedEffect(started, motionEnabled) {
-        if (started) {
-            if (motionEnabled) progress.animateTo(1f, tween(RuangFilmBrand.RevealMillis, easing = FastOutSlowInEasing))
-            finish()
-        }
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        // Let the centered gold mark render before starting the cutout reveal.
+        withFrameNanos { }
+        withFrameNanos { }
+        progress.animateTo(1f, tween(RuangFilmBrand.RevealMillis, easing = FastOutSlowInEasing))
+        finish()
     }
     val label = stringResource(R.string.app_name)
     BrandRevealFrame(
-        nativeIconBounds, if (started) progress.value else null,
+        progress.value.takeIf { it > 0f },
         Modifier.fillMaxSize().testTag("brand-reveal").semantics { contentDescription = label }
             .focusRequester(focus).focusable()
             .pointerInput(Unit) {
@@ -90,17 +76,21 @@ internal fun BrandRevealOverlay(nativeIconBounds: Rect?, started: Boolean, motio
 }
 
 @Composable
-internal fun BrandRevealFrame(nativeIconBounds: Rect?, progress: Float?, modifier: Modifier = Modifier) {
+internal fun BrandRevealFrame(progress: Float?, modifier: Modifier = Modifier) {
     val mark = remember { PathParser().parsePathString(RuangFilmBrand.PathData).toPath() }
     Canvas(modifier.testTag("brand-reveal").graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         drawRect(MovieStyle.Canvas)
-        val geometry = revealGeometry(size, nativeIconBounds, 288.dp.toPx(), progress ?: 0f)
+        val geometry = revealGeometry(size, 288.dp.toPx(), progress ?: 0f)
         withTransform({
             translate(geometry.origin.x, geometry.origin.y)
             scale(geometry.scale, geometry.scale, pivot = androidx.compose.ui.geometry.Offset.Zero)
         }) {
             if (progress == null) drawPath(mark, MovieStyle.Gold)
-            else drawPath(mark, Color.Black, blendMode = BlendMode.Clear)
+            else {
+                drawPath(mark, Color.Black, blendMode = BlendMode.Clear)
+                val gold = (1f - progress / .12f).coerceIn(0f, 1f)
+                if (gold > 0f) drawPath(mark, MovieStyle.Gold, alpha = gold)
+            }
         }
     }
 }

@@ -2,9 +2,11 @@ package com.assessment.movies.ui.components
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.core.graphics.scale
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +33,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToInt
+import java.io.DataInputStream
+import java.io.DataOutputStream
+import java.io.File
+import java.security.MessageDigest
 
 data class ArtworkSubjectMask(val inverseAlpha: ImageBitmap, val focus: Offset)
 
@@ -41,6 +47,7 @@ fun movieMaskKey(movie: Movie, origin: MovieArtworkOrigin): String {
 
 /** Owns a small, in-memory mask cache; navigation never waits for model installation or inference. */
 class ArtworkMasksViewModel(application: Application) : AndroidViewModel(application) {
+    private val diskCache = File(application.cacheDir, "artwork-masks-v2")
     private val segmenter = SubjectSegmentation.getClient(
         SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build(),
     )
@@ -50,7 +57,11 @@ class ArtworkMasksViewModel(application: Application) : AndroidViewModel(applica
     private val _masks = MutableStateFlow<Map<String, ArtworkSubjectMask>>(emptyMap())
     val masks = _masks.asStateFlow()
     private var worker: Job? = null
-    private var retryModelAfter = 0L
+    private var priorityKey: String? = null
+
+    fun prioritize(key: String) {
+        priorityKey = key
+    }
 
     fun prepare(key: String, image: Image) {
         if (key in _masks.value || key in attempted || key in pending) return
@@ -58,23 +69,31 @@ class ArtworkMasksViewModel(application: Application) : AndroidViewModel(applica
         while (pending.size > 12) pending.remove(pending.keys.first())
         if (worker?.isActive == true) return
         worker = viewModelScope.launch {
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (now < retryModelAfter) {
-                pending.clear()
-                return@launch
-            }
-            if (!modelAvailable()) {
-                retryModelAfter = android.os.SystemClock.elapsedRealtime() + 30_000
-                pending.clear()
-                return@launch
-            }
+            var modelReady = false
             while (pending.isNotEmpty()) {
-                val (nextKey, nextImage) = pending.entries.first().let { it.key to it.value }
-                pending.remove(nextKey)
+                val nextKey = priorityKey?.takeIf(pending::containsKey) ?: pending.keys.last()
+                val nextImage = pending.remove(nextKey) ?: continue
                 attempted.add(nextKey)
                 while (attempted.size > 48) attempted.remove(attempted.first())
                 try {
-                    val mask = withContext(Dispatchers.Default) { extract(nextImage) }
+                    val cached = withContext(Dispatchers.IO) { readMask(nextKey) }
+                    val mask = if (cached != null) cached else {
+                        if (!modelReady) {
+                            modelReady = modelAvailable()
+                            if (!modelReady) {
+                                delay(5_000)
+                                modelReady = modelAvailable()
+                            }
+                        }
+                        if (!modelReady) {
+                            attempted.remove(nextKey)
+                            pending.clear()
+                            break
+                        }
+                        withContext(Dispatchers.Default) { extract(nextImage) }?.also {
+                            withContext(Dispatchers.IO) { writeMask(nextKey, it) }
+                        }
+                    }
                     if (mask != null) {
                         attempted.remove(nextKey)
                         val updated = LinkedHashMap(_masks.value).apply { put(nextKey, mask) }
@@ -87,6 +106,48 @@ class ArtworkMasksViewModel(application: Application) : AndroidViewModel(applica
                     attempted.remove(nextKey)
                 }
             }
+        }
+    }
+
+    private fun cacheFile(key: String): File {
+        val name = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(diskCache, "$name.mask")
+    }
+
+    private fun readMask(key: String): ArtworkSubjectMask? {
+        val file = cacheFile(key)
+        if (!file.isFile) return null
+        return try {
+            DataInputStream(file.inputStream().buffered()).use { input ->
+                val focus = Offset(input.readFloat(), input.readFloat())
+                val bitmap = BitmapFactory.decodeStream(input)
+                if (bitmap == null || focus.x !in 0f..1f || focus.y !in 0f..1f) null
+                else ArtworkSubjectMask(bitmap.asImageBitmap(), focus)
+            }?.also { file.setLastModified(System.currentTimeMillis()) }
+        } catch (_: java.io.IOException) {
+            null
+        }
+    }
+
+    private fun writeMask(key: String, mask: ArtworkSubjectMask) {
+        val target = cacheFile(key)
+        val temporary = File(diskCache, "pending")
+        try {
+            diskCache.mkdirs()
+            val written = DataOutputStream(temporary.outputStream().buffered()).use { output ->
+                output.writeFloat(mask.focus.x)
+                output.writeFloat(mask.focus.y)
+                mask.inverseAlpha.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, output)
+            }
+            if (written && temporary.renameTo(target)) {
+                diskCache.listFiles { file -> file.extension == "mask" }?.sortedByDescending { it.lastModified() }
+                    ?.drop(48)?.forEach { it.delete() }
+            }
+        } catch (_: java.io.IOException) {
+            // The in-memory result is still usable if the cache directory cannot be written.
+        } finally {
+            temporary.delete()
         }
     }
 
@@ -104,7 +165,7 @@ class ArtworkMasksViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private suspend fun extract(image: Image): ArtworkSubjectMask? {
-        val scale = minOf(1f, 512f / maxOf(image.width, image.height).coerceAtLeast(1))
+        val scale = minOf(1f, 1024f / maxOf(image.width, image.height).coerceAtLeast(1))
         val width = (image.width * scale).roundToInt().coerceAtLeast(1)
         val height = (image.height * scale).roundToInt().coerceAtLeast(1)
         val source = (image as? BitmapImage)?.bitmap

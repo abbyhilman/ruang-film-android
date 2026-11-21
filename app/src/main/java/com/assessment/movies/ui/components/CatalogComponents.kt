@@ -160,7 +160,7 @@ fun MoviePosterCard(movie: Movie, onClick: () -> Unit, modifier: Modifier = Modi
         colors = CardDefaults.cardColors(containerColor = MovieStyle.Canvas),
     ) {
         MovieImage(
-            tmdbImage(movie.posterPath), stringResource(R.string.poster_description, movie.title),
+            tmdbImage(movie.posterPath, if (artworkTransition != null) "w780" else "w500"), stringResource(R.string.poster_description, movie.title),
             Modifier.movieArtworkTransition(movie.id, MovieArtworkOrigin.Poster, artworkTransition)
                 .fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))
                 .movieArtworkMask(movie.id, MovieArtworkOrigin.Poster, artworkTransition),

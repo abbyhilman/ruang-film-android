@@ -41,8 +41,15 @@ class MovieArtworkTransition(
 ) {
     internal val contentStates = mutableMapOf<String, SharedTransitionScope.SharedContentState>()
     companion object {
-        const val DurationMillis = 600
-        const val EdgeMillis = 96
+        const val DurationMillis = 640
+        const val EdgeMillis = 144
+        private const val MaskEdgeMillis = 96
+
+        internal fun isolation(progress: Float): Float {
+            val edge = MaskEdgeMillis.toFloat() / DurationMillis
+            val t = (minOf(progress, 1f - progress) / edge).coerceIn(0f, 1f)
+            return t * t * (3f - 2f * t)
+        }
     }
 
     fun mask(movieId: Int, origin: MovieArtworkOrigin): ArtworkSubjectMask? {
@@ -64,13 +71,13 @@ fun Modifier.movieArtworkTransition(movieId: Int, origin: MovieArtworkOrigin, tr
             sharedState,
             animatedVisibilityScope = transition.visibilityScope,
             boundsTransform = { start, end ->
-                if (transition.viewportSize.width == 0 || transition.viewportSize.height == 0) {
-                    tween(MovieArtworkTransition.DurationMillis, easing = FastOutSlowInEasing)
+                if (mask == null || transition.viewportSize.width == 0 || transition.viewportSize.height == 0) {
+                    tween(300, easing = FastOutSlowInEasing)
                 } else keyframesWithSpline {
                     durationMillis = MovieArtworkTransition.DurationMillis
                     start at 0
                     start at MovieArtworkTransition.EdgeMillis
-                    val focus = mask?.let { croppedSubjectFocus(it, end.width, end.height) } ?: Offset(.5f, .5f)
+                    val focus = croppedSubjectFocus(mask, end.width, end.height)
                     centeredArtworkBounds(start, end, transition.viewportSize, focus) at durationMillis / 2
                     end at durationMillis - MovieArtworkTransition.EdgeMillis
                     end at durationMillis
@@ -85,17 +92,16 @@ fun Modifier.movieArtworkTransition(movieId: Int, origin: MovieArtworkOrigin, tr
 fun Modifier.movieArtworkMask(movieId: Int, origin: MovieArtworkOrigin, transition: MovieArtworkTransition?): Modifier {
     if (transition == null) return this
     val sharedState = transition.contentStates[movieArtworkKey(movieId, origin)] ?: return this
+    val mask = transition.mask(movieId, origin) ?: return this
     val phase by transition.visibilityScope.transition.animateFloat(
         transitionSpec = { tween(MovieArtworkTransition.DurationMillis, easing = LinearEasing) }, label = "Subject reveal",
     ) { if (it == EnterExitState.Visible) 1f else 0f }
-    val mask = transition.mask(movieId, origin)
     return with(transition.sharedScope) {
         this@movieArtworkMask.graphicsLayer {
-            compositingStrategy = if (mask != null && sharedState.isMatchFound && isTransitionActive) CompositingStrategy.Offscreen else CompositingStrategy.Auto
-            alpha = if (mask == null && sharedState.isMatchFound && isTransitionActive) 1f - artworkIsolation(phase) else 1f
+            compositingStrategy = if (sharedState.isMatchFound && isTransitionActive) CompositingStrategy.Offscreen else CompositingStrategy.Auto
         }.drawWithContent {
             drawContent()
-            if (mask != null && sharedState.isMatchFound && isTransitionActive) {
+            if (sharedState.isMatchFound && isTransitionActive) {
                 val scale = maxOf(size.width / mask.inverseAlpha.width, size.height / mask.inverseAlpha.height)
                 val width = (mask.inverseAlpha.width * scale).roundToInt()
                 val height = (mask.inverseAlpha.height * scale).roundToInt()
@@ -110,11 +116,7 @@ fun Modifier.movieArtworkMask(movieId: Int, origin: MovieArtworkOrigin, transiti
     }
 }
 
-internal fun artworkIsolation(progress: Float): Float {
-    val edge = MovieArtworkTransition.EdgeMillis.toFloat() / MovieArtworkTransition.DurationMillis
-    val t = (minOf(progress, 1f - progress) / edge).coerceIn(0f, 1f)
-    return t * t * (3f - 2f * t)
-}
+internal fun artworkIsolation(progress: Float): Float = MovieArtworkTransition.isolation(progress)
 
 internal fun centeredArtworkBounds(start: Rect, end: Rect, viewport: IntSize, focus: Offset = Offset(.5f, .5f)): Rect {
     val halfWidth = (start.width + end.width) / 4f
@@ -140,7 +142,9 @@ fun Modifier.movieTitleTransition(movieId: Int, origin: MovieArtworkOrigin, tran
         this@movieTitleTransition.sharedBounds(
             rememberSharedContentState("movie-title/$movieId/${origin.name}"),
             animatedVisibilityScope = transition.visibilityScope,
-            boundsTransform = { start, end -> keyframesWithSpline {
+            boundsTransform = { start, end -> if (transition.mask(movieId, origin) == null) {
+                tween(300, easing = FastOutSlowInEasing)
+            } else keyframesWithSpline {
                 durationMillis = MovieArtworkTransition.DurationMillis
                 start at 0
                 start at MovieArtworkTransition.EdgeMillis

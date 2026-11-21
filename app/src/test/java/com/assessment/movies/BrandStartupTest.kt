@@ -7,6 +7,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
@@ -24,6 +25,7 @@ import com.assessment.movies.ui.branding.BrandRevealFrame
 import com.assessment.movies.ui.branding.RuangFilmBrand
 import com.assessment.movies.ui.branding.StartupRevealHost
 import com.assessment.movies.ui.branding.StartupRevealState
+import com.assessment.movies.ui.branding.revealGeometry
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -52,7 +54,7 @@ class BrandStartupTest {
             MovieTheme {
                 Box(Modifier.fillMaxSize().testTag("stage")) {
                     Box(Modifier.fillMaxSize().background(background.value))
-                    BrandRevealFrame(null, progress.value, Modifier.fillMaxSize())
+                    BrandRevealFrame(progress.value, Modifier.fillMaxSize())
                 }
             }
         }
@@ -68,7 +70,7 @@ class BrandStartupTest {
         assertTrue(pixels().all { it == android.graphics.Color.GREEN })
     }
 
-    @Test fun `handoff completes within reveal duration and restores Home interactions`() {
+    @Test fun `cold launch reveals Home without a system exit callback`() {
         compose.mainClock.autoAdvance = false
         val startup = StartupRevealState(true)
         var clicked = false
@@ -80,7 +82,6 @@ class BrandStartupTest {
             }
         }
         compose.onNodeWithText("Fixture Home").assertDoesNotExist()
-        compose.runOnIdle { startup.handoff(null, true) }
         compose.waitForIdle()
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(400)
@@ -93,21 +94,21 @@ class BrandStartupTest {
     }
 
     @Test fun `reduced motion skips the expanding mask`() {
-        val startup = StartupRevealState(true)
+        val startup = StartupRevealState(false)
         compose.setContent { MovieTheme { StartupRevealHost(startup) { Text("Fixture Home") } } }
-        compose.runOnIdle { startup.handoff(null, false) }
         compose.onNodeWithTag("brand-reveal").assertDoesNotExist()
         compose.onNodeWithText("Fixture Home").assertIsDisplayed()
     }
 
-    @Test fun `late system callback cannot replay a stopped or restored launch`() {
-        val stopped = StartupRevealState(true)
-        stopped.finish()
-        stopped.handoff(null, true)
-        assertFalse(stopped.visible)
-        val restored = StartupRevealState(false)
-        restored.handoff(null, true)
-        assertFalse(restored.visible)
+    @Test fun `zoom pivot stays at the viewport center throughout the reveal`() {
+        for (viewport in listOf(Size(430f, 932f), Size(932f, 430f))) {
+            for (progress in listOf(0f, .25f, .5f, 1f)) {
+                val geometry = revealGeometry(viewport, 288f, progress)
+                val pivot = geometry.origin + RuangFilmBrand.InkPivot * geometry.scale
+                assertEquals(viewport.width / 2f, pivot.x, .01f)
+                assertEquals(viewport.height / 2f, pivot.y, .01f)
+            }
+        }
     }
 
     @Test fun `native icons and animated mask use the approved path`() {
@@ -146,7 +147,7 @@ class BrandStartupTest {
             MovieTheme {
                 Box(Modifier.fillMaxSize().background(Color(0xFF47474F)).testTag("stage")) {
                     Text("Fixture Home: konten aplikasi di belakang mask", color = Color.White)
-                    BrandRevealFrame(null, progress.value, Modifier.fillMaxSize())
+                    BrandRevealFrame(progress.value, Modifier.fillMaxSize())
                 }
             }
         }

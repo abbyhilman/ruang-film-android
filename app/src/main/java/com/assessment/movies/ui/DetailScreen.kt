@@ -78,7 +78,7 @@ fun DetailScreen(
     val heroMovie = detail.data?.movie ?: previewMovie
     LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.testTag("detail-list")) {
         if (heroMovie != null) item(key = "hero") {
-            MovieHero(heroMovie, detail.data?.runtime, trailer, onBack, onPlay, onShare, artworkOrigin, artworkTransition)
+            MovieHero(previewMovie ?: heroMovie, detail.data?.runtime, trailer, onBack, onPlay, onShare, artworkOrigin, artworkTransition)
         }
         if (heroMovie != null) item(key = "title") {
             Box(Modifier.padding(horizontal = 16.dp)) {

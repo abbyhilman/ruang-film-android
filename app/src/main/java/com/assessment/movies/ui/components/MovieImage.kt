@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
+import coil3.size.Size
 import coil3.svg.SvgDecoder
 import coil3.Image
 import com.assessment.movies.R
@@ -33,8 +34,10 @@ fun MovieImage(
     onImageLoaded: ((Image) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val request = remember(model, context, memoryCacheKey) {
+    val prepareArtwork = onImageLoaded != null
+    val request = remember(model, context, memoryCacheKey, prepareArtwork) {
         ImageRequest.Builder(context).data(model).apply {
+            if (prepareArtwork) size(Size.ORIGINAL)
             if (memoryCacheKey != null) memoryCacheKey(memoryCacheKey).placeholderMemoryCacheKey(memoryCacheKey)
             if (model?.substringBefore('?')?.endsWith(".svg") == true) decoderFactory(SvgDecoder.Factory())
         }.build()

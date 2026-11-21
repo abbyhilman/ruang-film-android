@@ -164,7 +164,7 @@ class MovieArtworkTransitionTest {
         }
     }
 
-    @Test fun `missing mask fades the whole poster instead of flying a background rectangle`() {
+    @Test fun `missing mask keeps the whole poster visible in both directions`() {
         compose.mainClock.autoAdvance = false
         val expanded = mutableStateOf(false)
         compose.setContent {
@@ -187,8 +187,8 @@ class MovieArtworkTransitionTest {
             compose.runOnIdle { expanded.value = detail }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            compose.mainClock.advanceTimeBy(MovieArtworkTransition.DurationMillis / 2L)
-            assertEquals("No full poster rectangle should remain in the middle without a mask", 0, dominantPixels("red"))
+            advanceNativeFrames(144)
+            assertTrue("The fallback poster must remain visible during travel", dominantPixels("red") > 1000)
             compose.mainClock.advanceTimeBy(MovieArtworkTransition.DurationMillis + 160L)
             assertTrue("Resting artwork must return after the transition", dominantPixels("red") > 1000)
         }
@@ -226,7 +226,9 @@ class MovieArtworkTransitionTest {
         compose.runOnIdle { expanded.value = true }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
-        compose.mainClock.advanceTimeBy(160)
+        advanceNativeFrames(80)
+        assertEquals("The source stays in place while its background is removed", initialTop, firstRedRow())
+        advanceNativeFrames(144)
         val opening = dominantPixels("red")
         assertTrue("Artwork must travel toward the detail hero", firstRedRow() in 1 until initialTop)
         assertTrue("Shared image must animate after layout finds both endpoints", scope.isTransitionActive)
@@ -243,7 +245,9 @@ class MovieArtworkTransitionTest {
         compose.runOnIdle { expanded.value = false }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
-        compose.mainClock.advanceTimeBy(160)
+        advanceNativeFrames(80)
+        assertEquals("Back also holds the hero during the reveal", 0, firstRedRow())
+        advanceNativeFrames(144)
         val closing = dominantPixels("red")
         assertTrue("Back must travel toward the source card", firstRedRow() in 1 until initialTop)
         assertTrue(scope.isTransitionActive)
